@@ -8,7 +8,8 @@ import cv2
 import base64
 import numpy as np
 
-out_dir = './output'
+out_dir = '/home/lifelong/cable_routing/dependencies/gpt4vision/output'
+
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
@@ -78,52 +79,76 @@ def concat_and_save_images(frames, file_name):
 
 
 def main(video_path, use_azure, frame_num=10, file_name='test'):
+    
     selected_frames = read_frames(video_path, frame_num=frame_num)
+    
     concat_and_save_images(
         selected_frames,
         file_name +
-        '_recognized_frames.jpg')
+        '_recognized_frames.jpg'
+    )
     if use_azure:
         print("Using Azure OpenAI API.")
+        
     print("Understanding video content...")
     textual_instruction = video_analyzer.video_understanding(
-        selected_frames, use_azure=use_azure)
+        selected_frames, use_azure=use_azure
+    )
+    
     print("Textual instruction:", textual_instruction)
     print("Understanding scene...")
+    
     environmental_description = scene_analyzer.scene_understanding(
-        selected_frames[0], textual_instruction, use_azure=use_azure)
+        selected_frames[0], textual_instruction, use_azure=use_azure
+    )
+    
     print(
         "Environmental description:",
         json.dumps(
             environmental_description,
-            indent=4))
+            indent=4)
+    )
+    
     print("Generating task plan...")
+    
     aimodel = task_planner.planner(use_azure=use_azure)
+    
     # LLM plan generation
     task_plan = aimodel.generate(
         textual_instruction,
-        environmental_description)
+        environmental_description
+    )
+    
     print("Task plan:", task_plan['task_cohesion']['task_sequence'])
+    
+    # Save results
     fp = os.path.join(out_dir, file_name + '_high-level_tasks.json')
     with open(fp, 'w') as f:
         json.dump(task_plan, f, indent=4)
 
 
 if __name__ == "__main__":
+    
     parser = argparse.ArgumentParser(
-        description="Understand the video content and generate a textual instruction.")
+        description="Understand the video content and generate a textual instruction."
+        )
+    
     parser.add_argument(
-    "--video_path",
-    type=str,
-    help="Path to the video file. Default is 'sample_video/sample.mp4'.",
-    default="sample_video/sample.mp4"
+        "--video_path",
+        type=str,
+        help="Path to the video file. Default is 'sample_video/sample.mp4'.",
+        default="sample_video/test.mp4"
     )
+    
     parser.add_argument(
         "--use_azure",
         action="store_true",
-        help="Use Azure OpenAI API to generate textual instruction.")
+        help="Use Azure OpenAI API to generate textual instruction."
+        )
+    
+    video_path = "/home/lifelong/cable_routing/dependencies/gpt4vision/sample_video/test.mp4"
     args = parser.parse_args()
+    
     frame_num = 5  # Number of frames to be analyzed.
     file_name = os.path.splitext(os.path.basename(args.video_path))[0] # Prefix for the output files.
-    video_path = "/home/lifelong/cable_routing/dependencies/gpt4vision/sample_video/sample.mp4"
     main(video_path, args.use_azure, frame_num=frame_num, file_name=file_name)

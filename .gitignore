@@ -9,7 +9,10 @@
 *.catkin_tools
 /dependencies/jaxls
 /dependencies/jaxmp
+/dependencies/gpt4vision
+
 trajectories/*
+records/*
 debugging_output/*
 *.egg-info
 

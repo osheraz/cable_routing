@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/opt/ros/humble/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_egm_rws_managers/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_libegm/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_librws/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_robot_driver/abb_egm_hardware_interface/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_robot_driver/abb_egm_state_controller/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_robot_driver/abb_robot_cpp_utilities/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_robot_driver/abb_rws_service_provider/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/abb_robot_driver/abb_rws_state_publisher/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/yumi_zed_ros_interface/include/**",
+        "/home/lifelong/cable_routing/catkin_ws/src/zed-ros-wrapper/zed-ros-interfaces/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
