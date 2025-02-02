@@ -31,3 +31,9 @@
 [submodule "dependencies/yumi_jacobi"]
 	path = dependencies/yumi_jacobi
 	url = https://github.com/uynitsuj/yumi_jacobi.git
+[submodule "catkin_ws/src/zed-ros-wrapper"]
+	path = catkin_ws/src/zed-ros-wrapper
+	url = https://github.com/stereolabs/zed-ros-wrapper.git
+[submodule "catkin_ws/src/zion_msgs"]
+	path = catkin_ws/src/zion_msgs
+	url = https://github.com/nimiCurtis/zion_msgs.git

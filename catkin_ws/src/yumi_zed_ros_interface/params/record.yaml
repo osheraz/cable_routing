@@ -1,0 +1,29 @@
+
+topics:
+  tf_static: /tf_static
+  tf: /tf
+  imu: /zed/zed_node/imu/data
+  rgb: /zed/zed_node/rgb/image_rect_color 
+  depth: /zed/zed_node/depth/depth_registered
+  pcl: /zed/zed_node/point_cloud/cloud_registered
+  pose: /zed/zed_node/pose_with_covariance
+  odom: /zed/zed_node/odom
+  target_object: /obj_detect_publisher_node/object
+
+recording:
+  script: record_zed.sh
+  demonstrator: osher
+  prefix: bag_batch 
+  bag_folder: /home/lifelong/cable_routing/records # Relative path to the parent bag folder 
+  # bag_folder: ../../bag # Relative path to the parent bag folder 
+  topics_to_rec:
+    # - tf
+    # - tf_static
+    - rgb
+    - depth
+    # - odom
+    # - target_object
+    # - imu
+  description: desc
+
+

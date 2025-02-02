@@ -1,0 +1,24 @@
+<launch>
+
+  <arg name="robot" default="test" />
+  <arg name="prefix" default="" />
+  <arg name="demonstrator" default="" />
+  <arg name="description" default="" />
+
+  <!-- <arg name="topics_to_rec" default="None" /> -->
+
+  <group ns="$(arg robot)">
+        <node name="zed_recording_node" pkg="yumi_zed_ros_interface" type="zed_recording_node.py" output="screen">
+
+            <rosparam file="$(find yumi_zed_ros_interface)/params/record.yaml" command="load"/>
+
+            <!-- Conditionally override parameter if the argument is provided -->
+
+            <!-- <param name="recording/prefix" value="$(arg prefix)"/> -->
+            <param if="$(eval arg('prefix') != '')" name="recording/prefix" value="$(arg prefix)"/>
+            <param if="$(eval arg('demonstrator') != '')" name="recording/demonstrator" value="$(arg demonstrator)"/>
+            <param if="$(eval arg('description') != '')" name="recording/description" value="$(arg description)"/>
+        </node>
+  </group>
+
+</launch>

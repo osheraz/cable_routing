@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+
+<!-- Launch visualization in rviz -->
+<launch>
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find yumi_zed_ros_interface)/rviz/zed_display.rviz" required="true" />
+</launch>

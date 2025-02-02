@@ -1,0 +1,13 @@
+# ROS topics
+topics:
+  obj_detect_sub_topic: /zedm/zed_node/obj_det/objects
+  obj_detect_pub_topic: /obj_detect_publisher_node/object
+
+frames:
+  input_frame: zedm_left_camera_frame 
+
+# object properties
+object:
+  label: Person # string, label according to the zed object detection labels 
+  instance_id: 0 # int , the instance id of the object (defualt: 0)
+  distance_thresh: 20.0

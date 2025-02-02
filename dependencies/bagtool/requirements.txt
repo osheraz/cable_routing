@@ -1,0 +1,7 @@
+matplotlib
+numpy
+opencv-python
+tqdm
+moviepy
+h5py
+
