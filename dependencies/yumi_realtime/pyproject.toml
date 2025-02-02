@@ -1,13 +1,14 @@
+
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cable_routing"
+name = "yumi_realtime"
 version = "0.0.1"
 description = "YuMi Externally Guided Motion (EGM) wrapper"
 authors = [
-    {name = "osheraz", email = "osheraz@berkeley.edu"},
+    {name = "Justin Yu", email = "yujustin@berkeley.edu"},
 ]
 license = {text = "MIT Software License"}
 readme = "README.md"
@@ -20,3 +21,4 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 exclude = ["catkin_ws*"]
+
