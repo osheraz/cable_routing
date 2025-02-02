@@ -1,0 +1,12 @@
+# OPTIONAL (FOR VISUALIZATION ONLY)
+camera_matrix:
+  fx: 224.345
+  fy: 224.17
+  cx: 207.72
+  cy: 119.839
+dist_coeffs:
+  k1: 0.0
+  k2: 0.0
+  p1: 0.0
+  p2: 0.0
+  k3: 0.0

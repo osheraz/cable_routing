@@ -10,7 +10,7 @@
 /dependencies/jaxls
 /dependencies/jaxmp
 /dependencies/gpt4vision
-
+outputs/*
 trajectories/*
 records/*
 debugging_output/*

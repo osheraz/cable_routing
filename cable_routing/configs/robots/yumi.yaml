@@ -1,0 +1,27 @@
+YUMI_MIN_POS: [-2.94, -2.00, -2.94, -2.16, -5.06, -1.54, -4.00]
+
+# IP Vectors: VECTOR_SCALE * (divergence_pt - start_pt)
+VECTOR_SCALE: 2.0
+# Decrease the KEEPOUT_DIST to push IP Vectors in closer
+KEEPOUT_DIST: 10
+
+# Threshold above which trace is considered part of knot
+DENSITY_THRESH: 0.75
+# Radius in which to calculate density along every trace
+DENSITY_RADIUS: 50
+
+NUM_MOVES: 10
+CC_RADIUS: 100
+MIN_REGION_AREA: 100
+
+# Define colors as a dictionary
+COLORS:
+  RED: [255, 0, 0]
+  GREEN: [0, 255, 0]
+  BLUE: [0, 0, 255]
+  MAGENTA: [234, 52, 175]
+  YELLOW: [255, 234, 52]
+  CYAN: [52, 175, 234]
+  ORANGE: [243, 123, 0]
+  BROWN: [132, 64, 32]
+  WHITE: [255, 255, 255]

@@ -1,0 +1,13 @@
+headless: False
+
+# Default configurations
+defaults:
+  - _self_
+  - cameras: brio
+  - robots: yumi 
+  - override hydra/job_logging: disabled  # Explicit override to fix conflict
+
+hydra:
+  output_subdir: null  
+  run:
+    dir: . 

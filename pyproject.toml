@@ -16,6 +16,10 @@ dependencies = [
     "numpy",
     "viser",
     "tyro",
+    "hydra-core",
+    "opencv_python",
+    "matplotlib",
+    "omegaconf"
 ]
 
 [tool.setuptools.packages.find]
