@@ -25,8 +25,8 @@
 [submodule "dependencies/oculus_reader"]
 	path = dependencies/oculus_reader
 	url = https://github.com/rail-berkeley/oculus_reader.git
-[submodule "catkin_ws/src/catkin_ws/src/rospy_message_converter"]
-	path = catkin_ws/src/catkin_ws/src/rospy_message_converter
+[submodule "catkin_ws/src/rospy_message_converter"]
+	path = catkin_ws/src/rospy_message_converter
 	url = https://github.com/DFKI-NI/rospy_message_converter.git
 [submodule "dependencies/yumi_jacobi"]
 	path = dependencies/yumi_jacobi
@@ -37,3 +37,6 @@
 [submodule "catkin_ws/src/zion_msgs"]
 	path = catkin_ws/src/zion_msgs
 	url = https://github.com/nimiCurtis/zion_msgs.git
+[submodule "catkin_ws/src/apriltag"]
+	path = catkin_ws/src/apriltag
+	url = https://github.com/AprilRobotics/apriltag.git
