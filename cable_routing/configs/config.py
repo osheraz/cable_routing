@@ -58,7 +58,7 @@ def get_robot_config(robot_name: str):
     """
     robot_name = robot_name.split('_')[0]
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                               "robot",
+                               "robots",
                                f"{robot_name}.yaml")
     return _get_default_config(file_path=config_path)
 

@@ -31,7 +31,7 @@ class PointCloudGenerator:
     def __init__(self, view_matrix=None,
                  camera_info_topic='/zedm/zed_node/depth/camera_info',
                  height=None, width=None, sample_num=None, proj_matrix=None,
-                 depth_max=None, input_type='pcl', device='cpu'):
+                 depth_max=None, input_type='depth', device='cpu'):
 
 
         if camera_info_topic is not None:
@@ -148,7 +148,7 @@ class ZedPointCloudSubscriber:
 
     def __init__(self,
                  topic_pcl='/zedm/zed_node/point_cloud/cloud_registered',
-                 topic_depth='/zedm/zed_node/point_cloud/cloud_registered',
+                 topic_depth='/zedm/zed_node/depth/depth_registered',
                  display=False):
 
         self.far_clip = 0.5
@@ -188,10 +188,9 @@ class ZedPointCloudSubscriber:
             self._check_camera_ready()
 
         if self.use_pcl:
-            self._topic_name = rospy.get_param('~topic_name', '{}'.format(topic))
-            rospy.loginfo("(topic_name) Subscribing to PointCloud2 topic %s", self._topic_name)
-            self._pointcloud_subscriber = rospy.Subscriber(self._topic_name, PointCloud2, self.pointcloud_callback,
-                                                           queue_size=2)
+            self._topic_pcl_name = rospy.get_param('~topic_name', '{}'.format(topic_pcl))
+            rospy.loginfo("(topic_name) Subscribing to PointCloud2 topic %s", self._topic_pcl_name)
+            self._pointcloud_subscriber = rospy.Subscriber(self._topic_pcl_name, PointCloud2, self.pointcloud_callback, queue_size=2)
             self._check_pointcloud_ready()
 
         self.timer = rospy.Timer(rospy.Duration(0.1), self.timer_callback)
@@ -342,16 +341,16 @@ class ZedPointCloudSubscriber:
 
     def _check_pointcloud_ready(self):
         self.last_cloud = None
-        rospy.logdebug("Waiting for '{}' to be READY...".format(self._topic_name))
+        rospy.logdebug("Waiting for '{}' to be READY...".format(self._topic_pcl_name))
         while self.last_cloud is None and not rospy.is_shutdown():
             try:
-                self.last_cloud = rospy.wait_for_message(self._topic_name, PointCloud2, timeout=5.0)
-                rospy.logdebug("Current '{}' READY=>".format(self._topic_name))
+                self.last_cloud = rospy.wait_for_message(self._topic_pcl_name, PointCloud2, timeout=5.0)
+                rospy.logdebug("Current '{}' READY=>".format(self._topic_pcl_name))
                 self.pointcloud_init = True
                 self.last_cloud = self.pointcloud_msg_to_numpy(self.last_cloud)
                 self.start_time = rospy.get_time()
             except:
-                rospy.logerr("Current '{}' not ready yet, retrying for getting point cloud".format(self._topic_name))
+                rospy.logerr("Current '{}' not ready yet, retrying for getting point cloud".format(self._topic_pcl_name))
         return self.last_cloud
 
     def pointcloud_callback(self, msg):
