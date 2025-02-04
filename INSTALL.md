@@ -3,7 +3,7 @@ Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
 
 ```
 cd ~/
-git clone --recurse-submodules https://github.com/uynitsuj/yumi_realtime.git
+git clone --recurse-submodules https://github.com/osheraz/cable_routing.git
 ```
 
 ## Install Mamba-Forge
@@ -22,8 +22,8 @@ bash Miniforge3-$(uname)-$(uname -m).sh
 
 ## Create Mamba-Forge environment
 ```bash
-mamba create -n yumiegmros python=3.11
-mamba activate yumiegmros
+mamba create -n cable python=3.11
+mamba activate cable
 ```
 
 ```bash
@@ -35,9 +35,9 @@ conda config --env --add channels robostack-staging
 conda config --env --remove channels defaults
 ```
 
-## Install yumi_realtime
+## Install 
 ```bash
-cd ~/yumi_realtime
+cd ~/cable_routing
 python -m pip install -e .
 ```
 
@@ -45,14 +45,14 @@ python -m pip install -e .
 ```bash
 mamba install ros-noetic-desktop
 mamba deactivate
-mamba activate yumiegmros
+mamba activate cable
 
 mamba install compilers cmake pkg-config make ninja colcon-common-extensions catkin_tools rosdep
 ```
 
 ### Test mamba-forge ros installation
 ```bash
-mamba activate yumiegmros
+mamba activate cable
 roscore
 ```
 Should start a roscore instance
@@ -63,21 +63,21 @@ Should start a roscore instance
 
 ```bash
 # Change to the root of the Catkin workspace.
-cd ~/yumi_realtime/catkin_ws/src
+cd ~/cable_routing/catkin_ws/src
 
 git clone https://github.com/ros-industrial/abb_robot_driver_interfaces.git
 
 mamba install protobuf ros-noetic-controller-manager ros-noetic-joint-state-controller ros-noetic-velocity-controllers ros-noetic-position-controllers ros-noetic-controller-manager-msgs ros-noetic-hardware-interface ros-noetic-joint-limits-interface ros-noetic-controller-interface ros-noetic-realtime-tools
 
 # Finally build the workspace (may take a minute)
-cd ~/yumi_realtime/catkin_ws
+cd ~/cable_routing/catkin_ws
 catkin build
 ```
 Clean install should result in no error messages
 
 Finally, activate the workspace to get access to the packages just built:
 ```bash
-source ~/yumi_realtime/catkin_ws/devel/setup.bash
+source ~/cable_routing/catkin_ws/devel/setup.bash
 ```
 
 ## Test YuMi launch

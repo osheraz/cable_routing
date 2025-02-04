@@ -5,8 +5,6 @@ from omegaconf import OmegaConf, DictConfig
 from typing import Tuple
 
 
-
-
 def get_main_config_dir():
     return os.path.dirname(os.path.realpath(__file__))
 

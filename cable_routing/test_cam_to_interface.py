@@ -1,9 +1,9 @@
-from yumi_jacobi.interface import Interface
+# from yumi_jacobi.interface import Interface
 from autolab_core import RigidTransform, Point, CameraIntrinsics
 from omegaconf import DictConfig
 import hydra
 from hydra.utils import to_absolute_path
-from cable_routing.configs.config import get_main_config_dir, split_main_config
+from cable_routing.configs.utils.hydraconfig import get_main_config_dir, split_main_config
 import numpy as np
 
 FOAM_DEPTH = 0.0582
