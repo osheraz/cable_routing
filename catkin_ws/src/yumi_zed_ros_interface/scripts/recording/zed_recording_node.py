@@ -28,6 +28,7 @@ from tf2_msgs.msg import TFMessage
 from ros_bag_recorder import RosBagRecord
 from rospy_message_converter import message_converter
 from zed_interfaces.srv import reset_odometry
+from apriltag
 
 PATH = os.path.dirname(__file__)
 
