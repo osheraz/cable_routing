@@ -2,9 +2,9 @@ import sys
 import numpy as np
 from yumi_jacobi.interface import Interface
 from autolab_core import RigidTransform, Point
-from omegaconf import DictConfig
-from cable_routing.configs.config import get_robot_config
+from cable_routing.configs.envconfig import ExperimentConfig
 from typing import Literal, Optional
+from omegaconf import DictConfig
 import copy
 
 class YuMiRobotEnv():
@@ -13,14 +13,14 @@ class YuMiRobotEnv():
 
     def __init__(self):
         
-        print("Initializing YuMi...")
-        robot_config = robot_properties = get_robot_config('yumi')
+        print("[YUMI_JACOBI] Initializing YuMi...")
+        robot_config = ExperimentConfig.robot_cfg
         self.interface = Interface(speed=0.5)
         self.interface.yumi.left.min_position  = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.move_to_home()
         self.close_grippers()
-        print("DONE")
+        print("[YUMI_JACOBI] Done initializing YuMi.")
 
     def move_to_home(self):
         
