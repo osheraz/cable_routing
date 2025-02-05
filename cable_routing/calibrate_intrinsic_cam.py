@@ -39,10 +39,14 @@ def calibrate_camera(image_dir, chessboard_size, output_calib, output_intr):
     print("Calibration completed and saved.")
 
 def main():
+    # Load images from this directory
     image_dir = "data/calibrate_intr/*.jpg"
-    chessboard_size = (8, 6)
+    # Modify this to match the chessboard size used in the calibration images
+    chessboard_size = (8, 6) 
+    # Specify path to save calibration data and camera intrinsics
     output_calib = "path/camera_calibration.npz"
     output_intr = "path/camera_intr.intr"
+    
     calibrate_camera(image_dir, chessboard_size, output_calib, output_intr)
 
 if __name__ == "__main__":
