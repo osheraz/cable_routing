@@ -170,43 +170,49 @@ class YuMiRobotEnv:
 
 
 def main():
-    """ Main function to test YuMiRobotEnv motions. """
-    
+    """ Main function to test all YuMiRobotEnv functionalities. """
+
     # Initialize the YuMi robot environment
     yumi_env = YuMiRobotEnv()
 
-    # Print forward kinematics for both arms
-    print("Left Arm FK:", yumi_env.get_ee_pose()[0])
-    print("Right Arm FK:", yumi_env.get_ee_pose()[1])
-
-    # Move to home position
+    print("\n--- Initializing YuMi ---\n")
     yumi_env.move_to_home()
+    
+    # Print FK for both arms
+    print("\n--- Forward Kinematics ---")
+    left_pose, right_pose = yumi_env.get_ee_pose()
+    print("Left Arm FK:", left_pose)
+    print("Right Arm FK:", right_pose)
 
     # Calibrate and open grippers
+    print("\n--- Calibrating & Opening Grippers ---")
     yumi_env.interface.calibrate_grippers()
     yumi_env.interface.open_grippers()
     print("Left Gripper Position:", yumi_env.interface.driver_left.get_gripper_pos())
     print("Right Gripper Position:", yumi_env.interface.driver_right.get_gripper_pos())
 
     # Close grippers
+    print("\n--- Closing Grippers ---")
     yumi_env.close_grippers()
     print("Left Gripper Position After Close:", yumi_env.interface.driver_left.get_gripper_pos())
     print("Right Gripper Position After Close:", yumi_env.interface.driver_right.get_gripper_pos())
 
-    # Define waypoints for both arms
+    # Get joint values
+    print("\n--- Current Joint Positions ---")
+    left_joints, right_joints = yumi_env.get_joint_values()
+    print("Left Joint Positions:", left_joints)
+    print("Right Joint Positions:", right_joints)
+
+    # Define waypoints for testing
     wp1_l = RigidTransform(
         rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
         translation=[0.4, 0.3, 0.2]
     )
     wp2_l = RigidTransform(
-        rotation=[[-1.0000000, -0.0000000,  0.0000000], 
-                  [-0.0000000,  0.9659258, -0.2588190], 
-                  [-0.0000000, -0.2588190, -0.9659258]],
+        rotation=[[-1.0, 0.0, 0.0], 
+                  [0.0, 0.9659, -0.2588], 
+                  [0.0, -0.2588, -0.9659]],
         translation=[0.4, 0.4, 0.1]
-    )
-    wp3_l = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
-        translation=[0.3, 0.3, 0.15]
     )
     wp1_r = RigidTransform(
         rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
@@ -216,36 +222,57 @@ def main():
         rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
         translation=[0.35, -0.05, 0.2]
     )
-    wp3_r = RigidTransform(
-        rotation=[[-0.7071068,  0.7071068,  0.0000000], 
-                  [0.5000000,  0.5000000,  0.7071068], 
-                  [0.5000000,  0.5000000, -0.7071068]],
-        translation=[0.45, -0.08, 0.15]
+
+    print("\n--- Planning and Executing Linear Waypoints ---")
+    yumi_env.plan_and_execute_linear_waypoints("both", start_pose_l=wp1_l, end_pose_l=wp2_l, start_pose_r=wp1_r, end_pose_r=wp2_r)
+
+    # Test moving delta
+    print("\n--- Moving by Delta ---")
+    yumi_env.go_delta(left_delta=(0.05, 0, 0), right_delta=(-0.05, 0, 0))
+
+    # Test setting joint positions
+    print("\n--- Setting Joint Positions ---")
+    left_new_joints = np.clip(np.array(left_joints) + 0.1, -2*np.pi, 2*np.pi).tolist()
+    right_new_joints = np.clip(np.array(right_joints) - 0.1, -2*np.pi, 2*np.pi).tolist()
+    yumi_env.set_joint_positions(left_positions=left_new_joints, right_positions=right_new_joints)
+
+    # Test rotating grippers
+    print("\n--- Rotating Grippers ---")
+    yumi_env.rotate_gripper(angle=np.pi/6, arm="both")
+
+    # Test setting end-effector pose
+    print("\n--- Setting End-Effector Pose ---")
+    new_pose_l = RigidTransform(rotation=wp2_l.rotation, translation=[0.35, 0.3, 0.15])
+    new_pose_r = RigidTransform(rotation=wp2_r.rotation, translation=[0.3, -0.1, 0.2])
+    yumi_env.set_ee_pose(left_pose=new_pose_l, right_pose=new_pose_r)
+
+    # Test applying delta action
+    print("\n--- Applying Delta Action ---")
+    yumi_env.go_delta_action(action_xyz=(0, 0, 0.05), action_theta=(0, 0, np.pi/12))
+
+    # Test setting pose using translation & rotation
+    print("\n--- Setting EE Pose Using Translation and Rotation ---")
+    yumi_env.set_ee_pose_from_trans_rot(
+        trans=(0.4, 0.3, 0.15),
+        rot=(0, 0, 0, 1)
     )
 
-    # Plan and execute linear waypoints for both arms
-    yumi_env.plan_and_execute_linear_waypoints(
-        arms="both",
-        start_pose_l=wp1_l, end_pose_l=wp2_l,
-        start_pose_r=wp1_r, end_pose_r=wp2_r
-    )
+    # Test retrieving RPY
+    print("\n--- Getting End Effector RPY ---")
+    left_rpy, right_rpy = yumi_env.get_ee_rpy()
+    print("Left EE RPY:", left_rpy)
+    print("Right EE RPY:", right_rpy)
 
-    yumi_env.plan_and_execute_linear_waypoints(
-        arms="both",
-        start_pose_l=wp2_l, end_pose_l=wp3_l,
-        start_pose_r=wp2_r, end_pose_r=wp3_r
-    )
+    # Test retrieving Jacobian
+    print("\n--- Getting Jacobian Matrices ---")
+    try:
+        left_jacobian, right_jacobian = yumi_env.get_jacobian_matrix()
+        print("Left Jacobian:\n", left_jacobian)
+        print("Right Jacobian:\n", right_jacobian)
+    except NotImplementedError:
+        print("Jacobian computation not implemented yet.")
 
-    # Return home after motion execution
-    yumi_env.move_to_home()
-
-    # Test small incremental delta motions
-    yumi_env.go_delta(left_delta=(0, 0, -0.1), right_delta=(0, 0, -0.1))
-    yumi_env.go_delta(left_delta=(0, -0.1, 0), right_delta=(0, 0.1, 0))
-    yumi_env.go_delta(left_delta=(0.1, -0.1, 0), right_delta=(0.1, 0.1, 0))
-
-    # Move back to home
-    yumi_env.move_to_home()
+    print("\n--- All Tests Completed Successfully ---")
 
 
 if __name__ == "__main__":
