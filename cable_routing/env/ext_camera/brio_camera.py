@@ -187,6 +187,8 @@ def main():
     while True:
         frame = brio_camera.read()
 
+        # cv2.imshow("BRIO Camera Stream", frame)
+        frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
         cv2.imshow("BRIO Camera Stream", frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):

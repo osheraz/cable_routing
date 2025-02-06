@@ -1,41 +1,45 @@
 import sys
 import math
-import os
-import yaml
+import rospy
 import numpy as np
 import cv2
 import time
 from autolab_core import RigidTransform, Point
 from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
-from cable_routing.env.ext_camera.zed_camera_pyzed import Zed
-from cable_routing.configs.envconfig import ZedMiniConfig
 from cable_routing.configs.envconfig import ExperimentConfig
-
-import pyzed.sl as sl
 import tyro
+from sensor_msgs.msg import Image
+from cable_routing.env.ext_camera.ros.image_utils import image_msg_to_numpy
+from sensor_msgs.msg import PointCloud2, CameraInfo, Image
 
-# TODO make relative.
-world_to_extrinsic_zed_path = '/home/osheraz/cable_routing/data/zed/zed2world.tf'
-world_to_extrinsic_zed = RigidTransform.load(world_to_extrinsic_zed_path).inverse()
+# Load the transformation from the world frame to the ZED camera frame
+zed_to_world_path = '/home/osheraz/cable_routing/data/zed/zed2world.tf'
+world_to_zed = RigidTransform.load(zed_to_world_path).inverse()
 
+class ZedCameraSubscriber:
 
-def setup_zed_camera(camera_parameters):
-    """ Sets up the ZED camera with the given parameters. """
-    zed = Zed(
-        flip_mode=camera_parameters.flip_mode,
-        resolution=camera_parameters.resolution,
-        fps=camera_parameters.fps,
-        # cam_id=camera_parameters.id
-    )
+    def __init__(self, topic_depth='/zedm/zed_node/depth/depth_registered', topic_rgb='/zedm/zed_node/rgb/image_rect_color'):
+        self.depth_image = None
+        self.rgb_image = None
 
-    zed.cam.set_camera_settings(sl.VIDEO_SETTINGS.GAIN, camera_parameters.gain)
-    zed.cam.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, camera_parameters.exposure)
-    return zed
+        self.depth_subscriber = rospy.Subscriber(topic_depth, Image, self.depth_callback, queue_size=2)
+        self.rgb_subscriber = rospy.Subscriber(topic_rgb, Image, self.rgb_callback, queue_size=2)
 
+    def depth_callback(self, msg):
+        try:
+            self.depth_image = image_msg_to_numpy(msg)
+        except Exception as e:
+            rospy.logerr(f"Depth callback error: {e}")
+
+    def rgb_callback(self, msg):
+        try:
+            self.rgb_image = image_msg_to_numpy(msg)
+        except Exception as e:
+            rospy.logerr(f"RGB callback error: {e}")
 
 def click_event(event, u, v, flags, param):
-    """ Handles mouse click events to get pixel coordinates. """
+    """Handles mouse click events to get pixel coordinates."""
     if event == cv2.EVENT_LBUTTONDOWN:
         pixel_value = param["img"][v, u]
         print(f"Pixel coordinates: (u={u}, v={v}) - Pixel value: {pixel_value}")
@@ -48,33 +52,40 @@ def click_event(event, u, v, flags, param):
         param["u"] = u
         param["v"] = v
 
-
 def main(args: ExperimentConfig):
-    """ Main function to run the robot-camera interaction loop. """
-    
+    """Main function to run the robot-camera interaction loop."""
+    rospy.init_node('zed_yumi_integration')
+
     # Initialize YuMi robot
     yumi = YuMiRobotEnv(args.robot_cfg)
     yumi.close_grippers()
     yumi.move_to_home()
 
-    # Load camera configuration
-    camera_parameters = ZedMiniConfig()
-    zed = setup_zed_camera(camera_parameters)
+    # Initialize ZED camera subscriber
+    zed_cam = ZedCameraSubscriber()
 
-    # Retrieve camera calibration parameters
-    calibration_params = zed.cam.get_camera_information().camera_configuration.calibration_parameters
-    f_x, f_y = calibration_params.left_cam.fx, calibration_params.left_cam.fy
-    c_x, c_y = calibration_params.left_cam.cx, calibration_params.left_cam.cy
+    # Wait for the first set of images to be received
+    rospy.loginfo("Waiting for images from ZED camera...")
+    while zed_cam.rgb_image is None or zed_cam.depth_image is None:
+        rospy.sleep(0.1)
 
-    print(f_x, f_y, c_x, c_y)
+    camera_info = rospy.wait_for_message('/zedm/zed_node/depth/camera_info', CameraInfo)
+    cam_width = camera_info.width
+    cam_height = camera_info.height
+    f_x = camera_info.K[0]  # fx
+    f_y = camera_info.K[4]  # fy
+    c_x = camera_info.K[2]  # cx
+    c_y = camera_info.K[5]  # cy
+
+
     for _ in tqdm(range(3)):
         # Get the current end-effector pose
         left_pose, _ = yumi.get_ee_pose()
         previous_pose = left_pose  # Store for later use
 
         # Get RGB and depth images
-        left_img, depth = zed.get_rgb_depth()
-        left_img = cv2.cvtColor(left_img, cv2.COLOR_BGR2RGB)
+        left_img = zed_cam.rgb_image
+        depth = zed_cam.depth_image
 
         # Display image and wait for user selection
         params = {"img": left_img.copy(), "u": None, "v": None}
@@ -94,7 +105,7 @@ def main(args: ExperimentConfig):
 
         # Transform point from camera to robot frame
         point = Point(np.array([X, Y, Z]), frame="world")
-        point_in_robot = world_to_extrinsic_zed * point 
+        point_in_robot = world_to_zed * point
         print("Point in robot frame:", point_in_robot.data)
 
         # Move the robot end-effector to the target point
@@ -108,12 +119,8 @@ def main(args: ExperimentConfig):
         # input("Press Enter to continue...")
         # yumi.set_ee_pose(left_pose=previous_pose)  # Move back to original pose
 
-    # Close the camera
-    zed.close()
-
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-
     args = tyro.cli(ExperimentConfig)
-
     main(args)

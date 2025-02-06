@@ -94,7 +94,7 @@ class ZedCameraSubscriber:
         seg_frame = cv2.resize(self.seg_frame.astype(float), (320, 180), interpolation=cv2.INTER_NEAREST)
         last_frame = np.expand_dims(cv2.resize(self.last_frame[0], (320, 180), interpolation=cv2.INTER_AREA), axis=0)
         return last_frame, seg_frame
-
+    
     def process_depth_image(self, depth_image):
 
         # depth_image = self.crop_depth_image(depth_image)
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     while not rospy.is_shutdown():
         if zed_cam.display and zed_cam.last_frame is not None and zed_cam.raw_frame is not None:
-            
+
             cv2.imshow("Depth Image", zed_cam.last_frame.transpose(1, 2, 0))
             cv2.imshow("RGB Image", zed_cam.raw_frame)
 

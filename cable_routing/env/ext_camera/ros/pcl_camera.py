@@ -45,10 +45,11 @@ class PointCloudGenerator:
              [0, 0, 1]]
         )
         
+
         # TODO get from calib
-        self.ext_mat = torch.tensor([[-0.00807917, 0.50974899, -0.86028524, 0.73114316],
-                                     [0.99961725, 0.02688096, 0.00654023, -0.01966786],
-                                     [0.02645917, -0.85990312, -0.50977106, 0.1729284],
+        self.ext_mat = torch.tensor([[0.000737, -0.178996, 0.983850, 0.086292],
+                                     [-0.999998, 0.001475, 0.001017, 0.022357],
+                                 [-0.001633, -0.983849, -0.178995, 0.001017],
                                      [0., 0., 0., 1.]], dtype=torch.float32).to(device)
 
         def get_rotation_matrix(roll, pitch, yaw):
@@ -88,11 +89,11 @@ class PointCloudGenerator:
 
         if self.input_type == 'depth':
             if self.depth_max is not None:
-                valid_ids = points > -self.depth_max
+                valid_ids = points > self.depth_max
             else:
                 valid_ids = torch.ones(points.shape, dtype=bool, device=self.device)
 
-            valid_depth = points[valid_ids] * -1  # TODO
+            valid_depth = points[valid_ids]  # TODO
             uv_one_in_cam = self._uv_one_in_cam[valid_ids]
 
             # Calculate 3D points in camera coordinates
@@ -133,8 +134,8 @@ class ZedPointCloudSubscriber:
         self.far_clip = 0.5
         self.near_clip = 0.1
         self.dis_noise = 0.00
-        self.w = 320  
-        self.h = 180  
+        self.w = 640  
+        self.h = 360  
 
         self.init_success = False
         self.last_cloud = None
@@ -223,7 +224,7 @@ class ZedPointCloudSubscriber:
 
             cloud_points = self.pcl_gen.convert(frame)
             proc_cloud = self.process_pointcloud(cloud_points)
-            proc_cloud = self.sample_n(proc_cloud, num_sample=400)
+            proc_cloud = self.sample_n(proc_cloud, num_sample=4000)
             self.pointcloud_pub.publish_pointcloud(proc_cloud)
             self.last_cloud = proc_cloud
 
@@ -252,15 +253,15 @@ class ZedPointCloudSubscriber:
 
     def process_pointcloud(self, points):
 
-        x = points[:, 0]
-        y = points[:, 1]
-        z = points[:, 2]
-        valid1 = (z >= -0.1) & (z <= 0.2)
-        valid2 = (x >= 0.2) & (x <= 0.6)
-        valid3 = (y >= -0.4) & (y <= 0.4)
+        # x = points[:, 0]
+        # y = points[:, 1]
+        # z = points[:, 2]
+        # valid1 = (z >= -0.1) & (z <= 0.2)
+        # valid2 = (x >= 0.2) & (x <= 0.6)
+        # valid3 = (y >= -0.4) & (y <= 0.4)
 
-        valid = valid1 & valid3 & valid2
-        points = points[valid]
+        # valid = valid1 & valid3 & valid2
+        # points = points[valid]
         # points = torch.from_numpy(points)
         # sampled_points, indices = ops.sample_farthest_points(points=points.unsqueeze(0), K=points.shape[0])
         # sampled_points = sampled_points.squeeze(0)
