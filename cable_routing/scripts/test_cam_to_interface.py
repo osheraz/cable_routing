@@ -6,7 +6,7 @@ from hydra.utils import to_absolute_path
 from cable_routing.configs.utils.hydraconfig import get_main_config_dir, split_main_config
 import numpy as np
 
-FOAM_DEPTH = 0.0582
+TABLE_HEIGHT = 0.0582
 
 def get_world_coord_from_pixel_coord(pixel_coord, cam_intrinsics, cam_extrinsics):
     '''
@@ -14,10 +14,10 @@ def get_world_coord_from_pixel_coord(pixel_coord, cam_intrinsics, cam_extrinsics
     cam_intrinsics: 3x3 camera intrinsics matrix
     '''
     pixel_coord = np.array(pixel_coord)
-    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(np.r_[pixel_coord, 1.04 - FOAM_DEPTH])
+    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(np.r_[pixel_coord, 1.04 - TABLE_HEIGHT])
     point_3d_world = cam_extrinsics.matrix.dot(np.r_[point_3d_cam, 1.0])
     point_3d_world = point_3d_world[:3]/point_3d_world[3]
-    point_3d_world[-1] = FOAM_DEPTH 
+    point_3d_world[-1] = TABLE_HEIGHT 
     return point_3d_world
 
 
@@ -25,7 +25,7 @@ def get_world_coord_from_pixel_coord(pixel_coord, cam_intrinsics, cam_extrinsics
 def main(cfg: DictConfig):
     print("Initializing ...")
     
-    # Extrinsic calibration TODO: update
+    
     T_CAM_BASE =RigidTransform(rotation=[[1.0000000, 0.0000000,  0.0000000], 
                                          [0.0000000, 1.0000000, 0.0000000], 
                                          [0.0000000, 0.0000000, 1.0000000]],

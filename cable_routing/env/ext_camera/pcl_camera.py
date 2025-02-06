@@ -162,7 +162,6 @@ class ZedPointCloudSubscriber:
         self.relative = False
         self.pointcloud_init = False
         self.init_success = False
-        self.got_socket = False
         self.use_depth = True
         self.use_pcl = not self.use_depth
         

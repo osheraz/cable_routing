@@ -9,10 +9,10 @@ class ZedCameraSubscriber:
 
     def __init__(self, topic='/zedm/zed_node/depth/depth_registered', with_seg=False, display=False):
         
-        self.w = 320 
+        # TODO load from config
+        self.w = 320  
         self.h = 180 
         self.cam_type = 'd'
-        
         self.far_clip = 0.5
         self.near_clip = 0.1
         self.dis_noise = 0.00
@@ -20,29 +20,11 @@ class ZedCameraSubscriber:
         self.display = display
         self.zed_init = False
         self.init_success = False
-        self.with_seg = with_seg
-        self.with_socket = False
-
-        if with_seg:
-            from seg_camera import SegCameraSubscriber
-            self.seg = SegCameraSubscriber(with_socket=self.with_socket)
-            self.socket_id = self.seg.socket_id
-            self.plug_id = self.seg.plug_id
-            self.distinct = True
 
         self._topic_name = rospy.get_param('~topic_name', '{}'.format(topic))
         rospy.loginfo("(topic_name) Subscribing to Images to topic  %s", self._topic_name)
         self._check_camera_ready()
-        if with_seg:
-            self._check_seg_ready()
-
         self._image_subscriber = rospy.Subscriber(self._topic_name, Image, self.image_callback, queue_size=2)
-
-    def _check_seg_ready(self):
-        print('Waiting for SAM to init')
-        while not self.seg.init_success and not rospy.is_shutdown():
-            self.init_success &= self.seg.init_success
-        print('SAM is ready')
 
     def _check_camera_ready(self):
 
