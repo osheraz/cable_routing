@@ -91,10 +91,8 @@ if __name__ == '__main__':
         
         # Creates two camera publishers
         camera0 = CameraPublisher(device_id=0, name='camera_0')
-        camera1 = CameraPublisher(device_id=4, name='camera_1')
         
         camera0.start()
-        camera1.start()
         
         rospy.spin()
         
@@ -103,5 +101,3 @@ if __name__ == '__main__':
     finally:
         if 'camera0' in locals():
             camera0.stop()
-        if 'camera1' in locals():
-            camera1.stop()
