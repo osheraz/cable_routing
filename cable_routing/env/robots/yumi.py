@@ -4,15 +4,15 @@ from yumi_jacobi.interface import Interface
 from autolab_core import RigidTransform
 from cable_routing.configs.envconfig import ExperimentConfig
 from typing import Literal, Optional, List, Tuple
+import tyro
 import copy
 
 class YuMiRobotEnv:
-    """ Wrapper on top of Justin's class for the YuMi robot environment. """
-
-    def __init__(self):
+    def __init__(self, robot_config):
         print("[YUMI_JACOBI] Initializing YuMi...")
-        robot_config = ExperimentConfig.robot_cfg
-        self.interface = Interface(speed=0.5)
+
+        self.robot_config = robot_config
+        self.interface = Interface(speed=0.26)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.move_to_home()
@@ -169,11 +169,11 @@ class YuMiRobotEnv:
         pass
 
 
-def main():
+def main(args : ExperimentConfig):
     """ Main function to test all YuMiRobotEnv functionalities. """
 
     # Initialize the YuMi robot environment
-    yumi_env = YuMiRobotEnv()
+    yumi_env = YuMiRobotEnv(args.robot_cfg)
 
     print("\n--- Initializing YuMi ---\n")
     yumi_env.move_to_home()
@@ -224,7 +224,16 @@ def main():
     )
 
     print("\n--- Planning and Executing Linear Waypoints ---")
-    yumi_env.plan_and_execute_linear_waypoints("both", start_pose_l=wp1_l, end_pose_l=wp2_l, start_pose_r=wp1_r, end_pose_r=wp2_r)
+    current_pose_l, current_pose_r = yumi_env.get_ee_pose() 
+
+    # Plan and execute waypoints starting from the current pose
+    yumi_env.plan_and_execute_linear_waypoints(
+        arms="both",
+        start_pose_l=current_pose_l,  
+        end_pose_l=wp2_l,             
+        start_pose_r=current_pose_r,  
+        end_pose_r=wp2_r             
+    )
 
     # Test moving delta
     print("\n--- Moving by Delta ---")
@@ -276,4 +285,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+
+    args = tyro.cli(ExperimentConfig)
+
+    main(args)

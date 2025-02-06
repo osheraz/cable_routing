@@ -8,11 +8,15 @@ import time
 from autolab_core import RigidTransform, Point
 from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
-from cable_routing.env.ext_camera.zed_camera import Zed
+from cable_routing.env.ext_camera.zed_camera_pyzed import Zed
 from cable_routing.configs.envconfig import ZedMiniConfig
-import pyzed.sl as sl
+from cable_routing.configs.envconfig import ExperimentConfig
 
-world_to_extrinsic_zed_path = 'path_to_file/world_to_extrinsic_zed.tf'
+import pyzed.sl as sl
+import tyro
+
+# TODO make relative.
+world_to_extrinsic_zed_path = '/home/osheraz/cable_routing/data/zed/zed2world.tf'
 world_to_extrinsic_zed = RigidTransform.load(world_to_extrinsic_zed_path)
 
 
@@ -22,7 +26,7 @@ def setup_zed_camera(camera_parameters):
         flip_mode=camera_parameters.flip_mode,
         resolution=camera_parameters.resolution,
         fps=camera_parameters.fps,
-        cam_id=camera_parameters.id
+        # cam_id=camera_parameters.id
     )
 
     zed.cam.set_camera_settings(sl.VIDEO_SETTINGS.GAIN, camera_parameters.gain)
@@ -45,11 +49,11 @@ def click_event(event, u, v, flags, param):
         param["v"] = v
 
 
-def main():
+def main(args: ExperimentConfig):
     """ Main function to run the robot-camera interaction loop. """
     
     # Initialize YuMi robot
-    yumi = YuMiRobotEnv()
+    yumi = YuMiRobotEnv(args.robot_cfg)
     yumi.close_grippers()
     yumi.move_to_home()
 
@@ -93,19 +97,22 @@ def main():
         print("Point in robot frame:", point_in_robot.data)
 
         # Move the robot end-effector to the target point
-        target_pose = RigidTransform(rotation=RigidTransform.x_axis_rotation(math.pi), translation=point_in_robot.data)
-        target_pose.translation[2] += 0.2  # Move above the point
-        yumi.set_ee_pose(left_pose=target_pose)
+        # target_pose = RigidTransform(rotation=RigidTransform.x_axis_rotation(math.pi), translation=point_in_robot.data)
+        # target_pose.translation[2] += 0.2  # Move above the point
+        # yumi.set_ee_pose(left_pose=target_pose)
 
-        target_pose.translation[2] -= 0.2  # Move down to the point
-        yumi.set_ee_pose(left_pose=target_pose)
+        # target_pose.translation[2] -= 0.2  # Move down to the point
+        # yumi.set_ee_pose(left_pose=target_pose)
 
-        input("Press Enter to continue...")
-        yumi.set_ee_pose(left_pose=previous_pose)  # Move back to original pose
+        # input("Press Enter to continue...")
+        # yumi.set_ee_pose(left_pose=previous_pose)  # Move back to original pose
 
     # Close the camera
     zed.close()
 
 
 if __name__ == "__main__":
-    main()
+
+    args = tyro.cli(ExperimentConfig)
+
+    main(args)

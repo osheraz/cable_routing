@@ -1,10 +1,12 @@
 # from yumi_jacobi.interface import Interface
 from autolab_core import RigidTransform, Point, CameraIntrinsics
-from omegaconf import DictConfig
-import hydra
-from hydra.utils import to_absolute_path
-from cable_routing.configs.utils.hydraconfig import get_main_config_dir, split_main_config
+# from omegaconf import DictConfig
+# import hydra
+# from hydra.utils import to_absolute_path
+import tyro
+# from cable_routing.configs.utils.hydraconfig import get_main_config_dir, split_main_config
 import numpy as np
+from cable_routing.configs.envconfig import ExperimentConfig
 
 TABLE_HEIGHT = 0.0582
 
@@ -21,23 +23,24 @@ def get_world_coord_from_pixel_coord(pixel_coord, cam_intrinsics, cam_extrinsics
     return point_3d_world
 
 
-@hydra.main(version_base=None, config_name="config", config_path=get_main_config_dir())
-def main(cfg: DictConfig):
-    print("Initializing ...")
+# @hydra.main(version_base=None, config_name="config", config_path=get_main_config_dir())
+def main(args: ExperimentConfig):
+    print("Initializing ...") 
     
-    
+    cam_cfg = args.camera_cfg
+
     T_CAM_BASE =RigidTransform(rotation=[[1.0000000, 0.0000000,  0.0000000], 
                                          [0.0000000, 1.0000000, 0.0000000], 
                                          [0.0000000, 0.0000000, 1.0000000]],
                                         translation=[0.0, 0.0, 0.0])
 
-    CAM_INTR = CameraIntrinsics(fx=cfg.cameras.camera_matrix.fx,
-                                fy=cfg.cameras.camera_matrix.fy,
-                                cx=cfg.cameras.camera_matrix.cx,
-                                cy=cfg.cameras.camera_matrix.cy,
-                                width=cfg.cameras.width,
-                                height=cfg.cameras.height,
-                                frame=cfg.cameras.frame
+    CAM_INTR = CameraIntrinsics(fx=cam_cfg.fx,
+                                fy=cam_cfg.fy,
+                                cx=cam_cfg.cx,
+                                cy=cam_cfg.cy,
+                                width=cam_cfg.width,
+                                height=cam_cfg.height,
+                                frame=cam_cfg.frame
                                 )
 
     pixel_coord = [320, 240]
@@ -45,5 +48,6 @@ def main(cfg: DictConfig):
     print("World coordinate: ", world_coord)
 
 if __name__ == '__main__':
-    
-    main()
+
+    args = tyro.cli(ExperimentConfig)
+    main(args)

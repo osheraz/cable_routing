@@ -142,16 +142,35 @@ class ZedPointCloudSubscriber:
         self.pcl_gen = PointCloudGenerator(input_type='depth')
 
         self.pointcloud_pub = PointCloudPublisher(topic='/results/pointcloud')
-        self._depth_subscriber = rospy.Subscriber('/zedm/zed_node/rgb/image_rect_color', Image,
-                                            self._rgb_subscriber_callback, queue_size=2)
-        self._depth_subscriber = rospy.Subscriber('/zedm/zed_node/depth/depth_registered', Image,
-                                                    self._depth_subscriber_callback, queue_size=2)
+        self._rgb_subscriber = rospy.Subscriber('/zedm/zed_node/rgb/image_rect_color', Image, self._rgb_subscriber_callback, queue_size=2)
+        self._depth_subscriber = rospy.Subscriber('/zedm/zed_node/depth/depth_registered', Image, self._depth_subscriber_callback, queue_size=2)
         self._check_depth_camera_ready()
 
         self.timer = rospy.Timer(rospy.Duration(0.01), self.timer_callback)
 
+        self._check_rgb_ready
         self._check_convert_ready()
 
+    def _check_rgb_ready(self):
+
+        self.raw_frame = None
+        rospy.logdebug(
+            "Waiting for '{}' to be READY...".format('/zedm/zed_node/rgb/image_rect_color'))
+        while self.raw_frame is None and not rospy.is_shutdown():
+            try:
+                self.raw_frame = rospy.wait_for_message(
+                    '{}'.format('/zedm/zed_node/rgb/image_rect_color'), Image, timeout=5.0)
+                rospy.logdebug(
+                    "Current '{}' READY=>".format('/zedm/zed_node/rgb/image_rect_color'))
+                self.start_time = rospy.get_time()
+                self.raw_frame = image_msg_to_numpy(self.raw_frame)
+
+            except:
+                rospy.logerr(
+                    "Current '{}' not ready yet, retrying for getting image".format('/zedm/zed_node/rgb/image_rect_color'))
+                
+        return self.raw_frame
+    
     def _check_depth_camera_ready(self):
 
         self.depth = None
@@ -185,7 +204,7 @@ class ZedPointCloudSubscriber:
 
     def _rgb_subscriber_callback(self, msg):
         try:
-            self.rgb = image_msg_to_numpy(msg)
+            self.raw_frame = image_msg_to_numpy(msg)
         except Exception as e:
             print(e)
             return
@@ -270,7 +289,7 @@ class ZedPointCloudSubscriber:
 
     def get_last_rgb(self):
 
-        return self.rgb
+        return self.raw_frame
     
     def timer_callback(self, event):
         # Called periodically by the timer

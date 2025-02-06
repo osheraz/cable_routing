@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class SensorIOException(Exception):
     pass
 
-class BRIOSensor(object):
+class BRIOSensor():
     """A driver for BRIO .
 
     Parameters
@@ -168,3 +168,33 @@ class BRIOSensor(object):
         """
         if self._is_running:
             self.stop()
+
+
+import cv2
+import time
+
+def main():
+    # Initialize the BRIO Sensor with device 0 (default webcam)
+    brio_camera = BRIOSensor(device=0)
+
+    # Check if the camera is running
+    if not brio_camera.is_running:
+        print("Failed to start BRIO Sensor.")
+        return
+
+    print("Press 'q' to exit the camera stream...")
+
+    while True:
+        frame = brio_camera.read()
+
+        cv2.imshow("BRIO Camera Stream", frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Cleanup: Stop the camera and close the OpenCV window
+    brio_camera.stop()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()

@@ -55,8 +55,6 @@ def image_msg_to_numpy(msg, empty_value=None, output_resolution=None, max_depth=
             data = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)[:, :, :3].copy()
         elif is_depth16:
             data = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width).copy() / -1000
-            # max_depth_clip = max_depth if max_depth else np.max(data)
-            # data = 1 - (np.clip(data, a_min=0, a_max=max_depth_clip) / max_depth_clip)
             data = np.array(data.astype(np.float32)) #* 255
         elif is_depth32:
             data = np.frombuffer(msg.data, dtype=np.float32).reshape(msg.height, msg.width).copy()
