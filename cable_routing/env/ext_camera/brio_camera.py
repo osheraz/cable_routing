@@ -5,13 +5,13 @@ import cv2
 import matplotlib.pyplot as plt
 from autolab_core import CameraIntrinsics
 
-logger = logging.getLogger('phoxipy.PhoXiSensor')
+logger = logging.getLogger(__name__)
 
 class SensorIOException(Exception):
     pass
 
 class BRIOSensor(object):
-    """A driver for PhotoNeo PhoXi sensors.
+    """A driver for BRIO .
 
     Parameters
     ----------
@@ -24,8 +24,8 @@ class BRIOSensor(object):
         self._is_running = False
 
         # Set up camera intrinsics for the sensor
-        #these are the default, but user should check the image size and 
-        #appropriately set them if need be
+        # these are the default, but user should check the image size and 
+        # appropriately set them if need be
         self.width = 3840 # 3804 after undistortion
         self.height = 2160 # 2119 after undistortion
         self._camera_intr = self.create_intr(self.width, self.height)
@@ -36,14 +36,6 @@ class BRIOSensor(object):
         self._crop = crop
         self._inpaint = inpaint
         self.video = video
-        # from os import walk
-        # print available devices in /dev/video*
-        # print("Available devices:")
-        # f = []
-        # for (dirpath, dirnames, filenames) in walk('/dev'):
-        #     for filename in filenames:
-        #         if 'video' in filename:
-        #             print(filename)
         self.initialize()
         
     def initialize(self):
@@ -158,14 +150,6 @@ class BRIOSensor(object):
     def start(self):
         """Start the sensor driver.
         """
-        # if self.is_running:
-        #     logger.warning('PhoXi is already started')
-        #     return True
-        
-        # if not self._native_driver.start():
-        #     logger.warning('Failed to start Photoneo PhoXi')
-        #     self._is_running = False
-
         logger.info('Started BRIO {}'.format(self.device_name))
         self._is_running = True
         return self._is_running
@@ -173,13 +157,11 @@ class BRIOSensor(object):
     def stop(self):
         """Stop the sensor driver.
         """
-        # if not self._is_running:
-        #     logger.warning('PhoXi not running, cannot stop')
-        #     return False
-        # self._native_driver.stop()
-        # logger.info('Stopped Photoneo PhoXi {}'.format(self.device_name))
-        # self._is_running = False
-        # return True
+        self.cap.release()
+        cv2.destroyAllWindows()
+        self._is_running = False
+        logger.info('Stopped BRIO {}'.format(self.device_name))
+
 
     def __del__(self):
         """Automatically stop the sensor for safety.

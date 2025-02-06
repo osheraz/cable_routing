@@ -9,7 +9,7 @@ class ZedCameraSubscriber:
 
     def __init__(self, topic='/zedm/zed_node/depth/depth_registered', with_seg=False, display=False):
         
-        # TODO load from config
+        # TODO load from topic
         self.w = 320  
         self.h = 180 
         self.cam_type = 'd'

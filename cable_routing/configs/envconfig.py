@@ -25,7 +25,7 @@ class YuMiConfig:
 
 
 @dataclasses.dataclass(frozen=True)
-class CameraConfig:
+class BrioConfig:
     width: int = 3840
     height: int = 2160
     frame: str = 'brio'
@@ -34,10 +34,18 @@ class CameraConfig:
     cx: float = 1.79637288e+03
     cy: float = 1.08661527e+03
 
-
+@dataclasses.dataclass(frozen=True)
+class ZedMiniConfig:
+    fps: int = 30
+    id: int = 22008760
+    resolution: str = '1080p'
+    flip_mode: bool = False
+    gain: int = 31
+    exposure: int = 90
+    
 @dataclasses.dataclass
 class ExperimentConfig:
-    camera_cfg: CameraConfig
+    camera_cfg: BrioConfig
     robot_cfg: YuMiConfig
     board_cfg: EnvConfig
     
