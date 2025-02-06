@@ -90,10 +90,10 @@ class ZedCameraSubscriber:
             self.last_frame = self.process_depth_image(frame)
 
 
-    def get_frame(self):
-        seg_frame = cv2.resize(self.seg_frame.astype(float), (320, 180), interpolation=cv2.INTER_NEAREST)
-        last_frame = np.expand_dims(cv2.resize(self.last_frame[0], (320, 180), interpolation=cv2.INTER_AREA), axis=0)
-        return last_frame, seg_frame
+    def get_frames(self):
+        depth = self.last_frame
+        rgb = self.raw_frame
+        return rgb, depth
     
     def process_depth_image(self, depth_image):
 
@@ -112,7 +112,7 @@ class ZedCameraSubscriber:
 
 
 if __name__ == "__main__":
-    rospy.init_node('Zed')
+    rospy.init_node('zed_pub')
 
     zed_cam = ZedCameraSubscriber(display=True) 
     rate = rospy.Rate(60)

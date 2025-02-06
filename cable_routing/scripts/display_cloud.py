@@ -26,15 +26,12 @@ class ZedCameraSubscriber:
 def main():
     rospy.init_node('zed_pointcloud_visualization')
 
-    # Initialize ZED camera subscriber
     zed_cam = ZedCameraSubscriber()
 
-    # Wait for the first set of images to be received
     rospy.loginfo("Waiting for images from ZED camera...")
     while zed_cam.rgb_image is None or zed_cam.depth_image is None:
         rospy.sleep(0.1)
 
-    # Retrieve camera intrinsic parameters
     camera_info = rospy.wait_for_message('/zedm/zed_node/depth/camera_info', CameraInfo)
     width = camera_info.width
     height = camera_info.height
@@ -43,21 +40,16 @@ def main():
     cx = camera_info.K[2]
     cy = camera_info.K[5]
 
-    # Create Open3D intrinsic camera object
     intrinsic = o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy)
 
-    # Convert ROS images to Open3D format
     color_image = o3d.geometry.Image(zed_cam.rgb_image)
     depth_image = o3d.geometry.Image(zed_cam.depth_image.astype(np.float32))
 
-    # Create RGBD image
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(
         color_image, depth_image, convert_rgb_to_intensity=False)
 
-    # Generate point cloud
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
 
-    # Flip the point cloud for correct orientation
     ext_mat = [[0.000737, -0.178996, 0.983850, 0.086292],
                [-0.999998, 0.001475, 0.001017, 0.022357],
                [-0.001633, -0.983849, -0.178995, 0.001017],

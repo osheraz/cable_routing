@@ -74,8 +74,13 @@ class BRIOSensor():
 
     @staticmethod
     def create_intr(width,height):
-        return CameraIntrinsics(fx=3.43246678e+03,fy=3.44478930e+03,
-                cx=1.79637288e+03,cy=1.08661527e+03,width=width,height=height,frame='brio')
+        return CameraIntrinsics(fx=3.43246678e+03,
+                                fy=3.44478930e+03,
+                                cx=1.79637288e+03,
+                                cy=1.08661527e+03,
+                                width=width,
+                                height=height,
+                                frame='brio')
         
     @property
     def device_name(self):
