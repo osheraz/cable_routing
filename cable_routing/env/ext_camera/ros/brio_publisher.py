@@ -5,7 +5,7 @@ import threading
 from cable_routing.env.ext_camera.brio_camera import BRIOSensor
 
 class CameraPublisher:
-    def __init__(self, device_id=0, name='camera_0', fps=30, init_node=False):
+    def __init__(self, device_id=0, name='camera_0', fps=10, init_node=False):
         if init_node:
             rospy.init_node('camera_publisher', anonymous=True)
 

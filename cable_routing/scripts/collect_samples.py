@@ -3,7 +3,7 @@ import rospy
 import h5py
 import numpy as np
 from datetime import datetime
-from cable_routing.env.ext_camera.ros.brio_publisher import CameraPublisher
+from cable_routing.env.ext_camera.ros.brio_subscriber import BRIOSubscriber
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
 class CameraDataCollector:
@@ -21,7 +21,7 @@ class CameraDataCollector:
         self.file_prefix = file_prefix
         self.max_file_size = max_file_size * 1024 * 1024  # Convert MB to bytes
 
-        self.brio_camera = CameraPublisher()
+        self.brio_camera = BRIOSubscriber()
         self.zed_camera = ZedCameraSubscriber()
 
         # Create save directory if it doesn't exist
@@ -51,13 +51,15 @@ class CameraDataCollector:
         self.zed_group = self.hdf5_file.create_group('zed')
 
         # Initialize datasets with maxshape to allow appending
+        bwidth_ = 3809
+        height_ = 2121
         self.brio_rgb_dataset = self.brio_group.create_dataset(
             'rgb',
-            shape=(0, self.brio_camera.height, self.brio_camera.width, 3),
-            maxshape=(None, self.brio_camera.height, self.brio_camera.width, 3),
+            shape=(0, height_, bwidth_, 3),
+            maxshape=(None, height_, bwidth_, 3),
             dtype=np.uint8,
             compression="gzip",
-            compression_opts=9
+            compression_opts=2
         )
 
         self.zed_rgb_dataset = self.zed_group.create_dataset(
@@ -66,7 +68,7 @@ class CameraDataCollector:
             maxshape=(None, self.zed_camera.h, self.zed_camera.w, 3),
             dtype=np.uint8,
             compression="gzip",
-            compression_opts=9
+            compression_opts=2
         )
 
         self.zed_depth_dataset = self.zed_group.create_dataset(
@@ -75,18 +77,21 @@ class CameraDataCollector:
             maxshape=(None, self.zed_camera.h, self.zed_camera.w),
             dtype=np.float32,
             compression="gzip",
-            compression_opts=9
+            compression_opts=2
         )
 
     def _append_to_dataset(self, dataset, data):
         """Append data to an HDF5 dataset."""
+        # Resize the dataset to accommodate the new data
         dataset.resize((dataset.shape[0] + 1), axis=0)
+        # Append the new data
         dataset[-1] = data
+        # Update the current file size
         self.current_file_size += data.nbytes
 
     def collect_and_save_data(self):
-        """Collect data from cameras and save to HDF5 files."""
-        rate = rospy.Rate(10)  # 10 Hz
+        """Collect data from cameras and save to HDF5 files. - super slow"""
+        rate = rospy.Rate(30)  # 30 Hz
 
         while not rospy.is_shutdown():
             brio_rgb = self.brio_camera.get_frame()
@@ -99,6 +104,7 @@ class CameraDataCollector:
             if zed_depth is not None:
                 self._append_to_dataset(self.zed_depth_dataset, zed_depth)
 
+            print('add')
             # Check if current file exceeds the maximum size
             if self.current_file_size >= self.max_file_size:
                 self._create_new_hdf5_file()
@@ -109,10 +115,10 @@ class CameraDataCollector:
         """Close the HDF5 file and release resources."""
         if self.hdf5_file:
             self.hdf5_file.close()
-        self.brio_camera.stop()
+            print('File saved successfully.')
 
 if __name__ == '__main__':
-    save_dir = '/path/to/save/directory'  # Specify your desired save directory
+    save_dir = '/home/osheraz/cable_routing/records'  # Specify your desired save directory
     collector = CameraDataCollector(save_directory=save_dir, max_file_size=100)  # 100 MB per file
     try:
         collector.collect_and_save_data()

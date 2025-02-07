@@ -1,6 +1,6 @@
 import rospy
 from sensor_msgs.msg import Image
-from image_utils import image_msg_to_numpy
+from cable_routing.env.ext_camera.ros.image_utils import image_msg_to_numpy
 import numpy as np
 import cv2
 
@@ -15,8 +15,8 @@ class ZedCameraSubscriber:
         self.w = 640  
         self.h = 360 
         self.cam_type = 'd'
-        self.far_clip = 3
-        self.near_clip = 0.
+        self.far_clip = 1
+        self.near_clip = 0.1
         self.dis_noise = 0.00
         
         self.display = display

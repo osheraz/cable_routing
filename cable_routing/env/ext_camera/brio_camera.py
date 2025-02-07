@@ -28,6 +28,8 @@ class BRIOSensor():
         # appropriately set them if need be
         self.width = 3840 # 3804 after undistortion
         self.height = 2160 # 2119 after undistortion
+        self.width_ = 3809
+        self.height_ = 2121
         self._camera_intr = self.create_intr(self.width, self.height)
         self.BRIO_DIST = np.asarray([ 0.22325137, -0.73638229, -0.00355125, -0.0042986,   0.96319653])
         self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(self._camera_intr.K, self.BRIO_DIST, (self.width,self.height), 1, (self.width,self.height))
