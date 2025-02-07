@@ -53,7 +53,7 @@ def play_videos_side_by_side(hdf5_file_path, brio_dataset_path, zed_dataset_path
 
 if __name__ == "__main__":
     # Replace with the path to your HDF5 file
-    hdf5_file_path = '/home/osheraz/cable_routing/records/camera_data_20250206_172340_0.h5'
+    hdf5_file_path = '/home/osheraz/cable_routing/records/camera_data_20250206_174759_0.h5'
     # Paths to the datasets within the HDF5 file
     brio_dataset_path = 'brio/rgb'
     zed_dataset_path = 'zed/rgb'
