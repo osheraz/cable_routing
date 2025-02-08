@@ -3,12 +3,11 @@ import math
 import numpy as np
 import cv2
 import time
+import tyro
 from autolab_core import RigidTransform, Point, CameraIntrinsics
+from cable_routing.env.ext_camera.rgb_camera import BRIOSensor
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 from cable_routing.configs.envconfig import ExperimentConfig
-import tyro
-from sensor_msgs.msg import CameraInfo
-from cable_routing.env.ext_camera.brio_camera import BRIOSensor
 
 # Constants
 TABLE_HEIGHT = 0.0582

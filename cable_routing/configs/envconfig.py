@@ -28,11 +28,15 @@ class YuMiConfig:
 class BrioConfig:
     width: int = 3840
     height: int = 2160
+    width_: int = 3809
+    height_: int = 2121
     frame: str = 'brio'
     fx: float = 3.43246678e+03
     fy: float = 3.44478930e+03
     cx: float = 1.79637288e+03
     cy: float = 1.08661527e+03
+    FPS: int = 30
+    BRIO_DIST: Tuple[float, ...] = (0.22325137, -0.73638229, -0.00355125, -0.0042986, 0.96319653)
 
 @dataclasses.dataclass(frozen=True)
 class ZedMiniConfig:

@@ -9,9 +9,8 @@ from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 from cable_routing.configs.envconfig import ExperimentConfig
 import tyro
-from sensor_msgs.msg import Image
 from cable_routing.env.ext_camera.ros.image_utils import image_msg_to_numpy
-from sensor_msgs.msg import PointCloud2, CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image
 
 # Load the transformation from the world frame to the ZED camera frame
 zed_to_world_path = '/home/osheraz/cable_routing/data/zed/zed2world.tf'

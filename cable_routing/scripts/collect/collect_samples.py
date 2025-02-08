@@ -57,40 +57,41 @@ class CameraDataCollector:
             'rgb',
             shape=(0, height_, bwidth_, 3),
             maxshape=(None, height_, bwidth_, 3),
+            chunks=(1, height_, bwidth_, 3),
             dtype=np.uint8,
             compression="gzip",
-            compression_opts=2
+            compression_opts=9
         )
 
         self.zed_rgb_dataset = self.zed_group.create_dataset(
             'rgb',
             shape=(0, self.zed_camera.h, self.zed_camera.w, 3),
             maxshape=(None, self.zed_camera.h, self.zed_camera.w, 3),
+            chunks=(1, self.zed_camera.h, self.zed_camera.w, 3),
             dtype=np.uint8,
             compression="gzip",
-            compression_opts=2
+            compression_opts=9
         )
 
         self.zed_depth_dataset = self.zed_group.create_dataset(
             'depth',
             shape=(0, self.zed_camera.h, self.zed_camera.w),
             maxshape=(None, self.zed_camera.h, self.zed_camera.w),
+            chunks=(1, self.zed_camera.h, self.zed_camera.w),
             dtype=np.float32,
             compression="gzip",
-            compression_opts=2
+            compression_opts=9
         )
 
     def _append_to_dataset(self, dataset, data):
         """Append data to an HDF5 dataset."""
         # Resize the dataset to accommodate the new data
         dataset.resize((dataset.shape[0] + 1), axis=0)
-        # Append the new data
         dataset[-1] = data
-        # Update the current file size
         self.current_file_size += data.nbytes
 
     def collect_and_save_data(self):
-        """Collect data from cameras and save to HDF5 files. - super slow"""
+        """Collect data from cameras and save to HDF5 files."""
         rate = rospy.Rate(30)  # 30 Hz
 
         while not rospy.is_shutdown():
@@ -118,6 +119,7 @@ class CameraDataCollector:
             print('File saved successfully.')
 
 if __name__ == '__main__':
+    
     save_dir = '/home/osheraz/cable_routing/records'  # Specify your desired save directory
     collector = CameraDataCollector(save_directory=save_dir, max_file_size=100)  # 100 MB per file
     try:

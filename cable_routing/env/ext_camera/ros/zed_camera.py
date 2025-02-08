@@ -54,7 +54,7 @@ class ZedCameraSubscriber:
         return self.raw_frame
     
     def _check_depth_ready(self):
-
+        
         self.last_frame = None
         rospy.logdebug("Waiting for '{}' to be READY...".format(self._topic_name))
 
