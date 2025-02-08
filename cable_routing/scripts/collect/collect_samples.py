@@ -6,8 +6,9 @@ from datetime import datetime
 from cable_routing.env.ext_camera.ros.brio_subscriber import BRIOSubscriber
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
+
 class CameraDataCollector:
-    def __init__(self, save_directory, file_prefix='camera_data', max_file_size=100):
+    def __init__(self, save_directory, file_prefix="camera_data", max_file_size=100):
         """
         Initialize the data collector.
 
@@ -16,7 +17,7 @@ class CameraDataCollector:
         - file_prefix: Prefix for the HDF5 filenames.
         - max_file_size: Maximum size of each HDF5 file in MB.
         """
-        rospy.init_node('camera_data_collector', anonymous=True)
+        rospy.init_node("camera_data_collector", anonymous=True)
         self.save_directory = save_directory
         self.file_prefix = file_prefix
         self.max_file_size = max_file_size * 1024 * 1024  # Convert MB to bytes
@@ -39,48 +40,48 @@ class CameraDataCollector:
         if self.hdf5_file:
             self.hdf5_file.close()
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{self.file_prefix}_{timestamp}_{self.file_index}.h5"
         filepath = os.path.join(self.save_directory, filename)
-        self.hdf5_file = h5py.File(filepath, 'w')
+        self.hdf5_file = h5py.File(filepath, "w")
         self.current_file_size = 0
         self.file_index += 1
 
         # Create groups for BRIO and ZED data
-        self.brio_group = self.hdf5_file.create_group('brio')
-        self.zed_group = self.hdf5_file.create_group('zed')
+        self.brio_group = self.hdf5_file.create_group("brio")
+        self.zed_group = self.hdf5_file.create_group("zed")
 
         # Initialize datasets with maxshape to allow appending
         bwidth_ = 3809
         height_ = 2121
         self.brio_rgb_dataset = self.brio_group.create_dataset(
-            'rgb',
+            "rgb",
             shape=(0, height_, bwidth_, 3),
             maxshape=(None, height_, bwidth_, 3),
             chunks=(1, height_, bwidth_, 3),
             dtype=np.uint8,
             compression="gzip",
-            compression_opts=9
+            compression_opts=9,
         )
 
         self.zed_rgb_dataset = self.zed_group.create_dataset(
-            'rgb',
+            "rgb",
             shape=(0, self.zed_camera.h, self.zed_camera.w, 3),
             maxshape=(None, self.zed_camera.h, self.zed_camera.w, 3),
             chunks=(1, self.zed_camera.h, self.zed_camera.w, 3),
             dtype=np.uint8,
             compression="gzip",
-            compression_opts=9
+            compression_opts=9,
         )
 
         self.zed_depth_dataset = self.zed_group.create_dataset(
-            'depth',
+            "depth",
             shape=(0, self.zed_camera.h, self.zed_camera.w),
             maxshape=(None, self.zed_camera.h, self.zed_camera.w),
             chunks=(1, self.zed_camera.h, self.zed_camera.w),
             dtype=np.float32,
             compression="gzip",
-            compression_opts=9
+            compression_opts=9,
         )
 
     def _append_to_dataset(self, dataset, data):
@@ -105,7 +106,7 @@ class CameraDataCollector:
             if zed_depth is not None:
                 self._append_to_dataset(self.zed_depth_dataset, zed_depth)
 
-            print('add')
+            print("add")
             # Check if current file exceeds the maximum size
             if self.current_file_size >= self.max_file_size:
                 self._create_new_hdf5_file()
@@ -116,12 +117,17 @@ class CameraDataCollector:
         """Close the HDF5 file and release resources."""
         if self.hdf5_file:
             self.hdf5_file.close()
-            print('File saved successfully.')
+            print("File saved successfully.")
 
-if __name__ == '__main__':
-    
-    save_dir = '/home/osheraz/cable_routing/records'  # Specify your desired save directory
-    collector = CameraDataCollector(save_directory=save_dir, max_file_size=100)  # 100 MB per file
+
+if __name__ == "__main__":
+
+    save_dir = (
+        "/home/osheraz/cable_routing/records"  # Specify your desired save directory
+    )
+    collector = CameraDataCollector(
+        save_directory=save_dir, max_file_size=100
+    )  # 100 MB per file
     try:
         collector.collect_and_save_data()
     except rospy.ROSInterruptException:

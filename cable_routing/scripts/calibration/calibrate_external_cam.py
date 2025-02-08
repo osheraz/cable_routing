@@ -22,32 +22,52 @@ TAG_SIZE = 0.098
 aruco_to_world = {
     0: np.array(
         [
-            [0, 1, 0, 0.4360 + 9*0.025 - 0.0242 - TAG_SIZE/2 ],  # Transform for ArUco ID 0
-            [-1, 0, 0, 0.2600 + 0.059 + TAG_SIZE/2],
+            [
+                0,
+                1,
+                0,
+                0.4360 + 9 * 0.025 - 0.0242 - TAG_SIZE / 2,
+            ],  # Transform for ArUco ID 0
+            [-1, 0, 0, 0.2600 + 0.059 + TAG_SIZE / 2],
             [0, 0, 1, 0.001293],
             [0, 0, 0, 1],
         ]
     ),
     1: np.array(
         [
-            [0, 1, 0, 0.4360 + 7*0.025 - 0.0242 - TAG_SIZE/2],  # Transform for ArUco ID 1
-            [-1, 0, 0, 0.2600 - 9*0.025 + 0.059 + TAG_SIZE/2],
+            [
+                0,
+                1,
+                0,
+                0.4360 + 7 * 0.025 - 0.0242 - TAG_SIZE / 2,
+            ],  # Transform for ArUco ID 1
+            [-1, 0, 0, 0.2600 - 9 * 0.025 + 0.059 + TAG_SIZE / 2],
             [0, 0, 1, 0.001293],
             [0, 0, 0, 1],
         ]
     ),
     2: np.array(
         [
-            [0, 1, 0, 0.4360 + 9*0.025 - 0.0242 - TAG_SIZE/2],  # Transform for ArUco ID 2
-            [-1, 0, 0, 0.2600 - 18*0.025 + 0.059 + TAG_SIZE/2],
+            [
+                0,
+                1,
+                0,
+                0.4360 + 9 * 0.025 - 0.0242 - TAG_SIZE / 2,
+            ],  # Transform for ArUco ID 2
+            [-1, 0, 0, 0.2600 - 18 * 0.025 + 0.059 + TAG_SIZE / 2],
             [0, 0, 1, 0.001293],
             [0, 0, 0, 1],
         ]
     ),
     3: np.array(
         [
-            [0, 1, 0, 0.4360 + 9*0.025 - 0.0242 - TAG_SIZE/2],  # Transform for ArUco ID 3
-            [-1, 0, 0, 0.2600 - 27*0.025 + 0.059 + TAG_SIZE/2],
+            [
+                0,
+                1,
+                0,
+                0.4360 + 9 * 0.025 - 0.0242 - TAG_SIZE / 2,
+            ],  # Transform for ArUco ID 3
+            [-1, 0, 0, 0.2600 - 27 * 0.025 + 0.059 + TAG_SIZE / 2],
             [0, 0, 1, 0.001293],
             [0, 0, 0, 1],
         ]
@@ -58,16 +78,14 @@ aruco_to_world = {
 def main(is_zed: bool, image_path: str = None, tag_size: float = TAG_SIZE):
     # tag size is side length in meters
     # Camera intrinsics (you can obtain these from camera calibration)
-    
+
     if not is_zed:
         X = np.load("brio_info/config/camera_calibration.npz")  # Example camera matrix
         camera_matrix = X["camera_matrix"]
         dist_coeffs = X["dist_coeffs"]  # Assuming no lens distortion
     else:
         # zed = Zed(flip_mode=False, cam_id=None, is_res_1080=False)
-        camera_matrix = np.load(
-            "path_to/zed_intr.npy"
-        )  # zed.get_K()
+        camera_matrix = np.load("path_to/zed_intr.npy")  # zed.get_K()
         # intr_dict = zed.get_ns_intrinsics()
         dist_coeffs = np.load(
             "path_to/zed_dist_coeffs.npy"
@@ -134,7 +152,7 @@ def main(is_zed: bool, image_path: str = None, tag_size: float = TAG_SIZE):
                     aruco_world_transform @ world_corner_homogeneous
                 )
                 world_points.append(world_corner_transformed[:3])
-                
+
     cv2.imshow("Aruco Markers with Axes", img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()

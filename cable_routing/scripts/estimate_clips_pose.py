@@ -6,10 +6,11 @@ from pathlib import Path
 from autolab_core import RigidTransform
 from cable_routing.env.ext_camera.utils.pcl_utils import depth_to_pointcloud
 
+
 def color_segment_fixtures(point_cloud, color_threshold=(0.1, 0.1, 0.1)):
     points = np.asarray(point_cloud.points)
     colors = np.asarray(point_cloud.colors)
-    
+
     mask = np.linalg.norm(colors - color_threshold, axis=1) < 0.2  # Adjust threshold
     fixture_points = points[mask]
 
@@ -19,15 +20,17 @@ def color_segment_fixtures(point_cloud, color_threshold=(0.1, 0.1, 0.1)):
 def cluster_fixtures(fixture_points, eps=0.02, min_points=10):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(fixture_points)
-    
-    labels = np.array(pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True))
-    
+
+    labels = np.array(
+        pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True)
+    )
+
     if labels.size == 0 or (labels == -1).all():  # Check if all points are noise
         print("No valid clusters found.")
         return []
 
     clusters = [fixture_points[labels == i] for i in range(labels.max() + 1) if i != -1]
-    
+
     return clusters
 
 
@@ -42,7 +45,7 @@ def estimate_pose_pca(cluster):
 
 
 def visualize_results(pcd, clusters, fixture_poses):
-    
+
     fixture_colors = [
         [1, 0, 0],  # Red
         [0, 1, 0],  # Green
@@ -65,7 +68,9 @@ def visualize_results(pcd, clusters, fixture_poses):
         centroid = np.mean(cluster, axis=0)
 
         arrow = o3d.geometry.LineSet()
-        arrow.points = o3d.utility.Vector3dVector([centroid, centroid + orientation * 0.05])
+        arrow.points = o3d.utility.Vector3dVector(
+            [centroid, centroid + orientation * 0.05]
+        )
         arrow.lines = o3d.utility.Vector2iVector([[0, 1]])
         arrow.colors = o3d.utility.Vector3dVector([[1, 1, 1]])  # White arrow
         fixture_orientations.append(arrow)
@@ -75,27 +80,25 @@ def visualize_results(pcd, clusters, fixture_poses):
 
 
 def main():
-    
+
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent.parent
     hdf5_file_path = project_root / "records" / "camera_data_20250206_174445_0.h5"
     zed_to_world_path = project_root / "data" / "zed" / "zed2world.tf"
     camera_to_world = RigidTransform.load(zed_to_world_path)
-    
+
     zed_dataset_path = "zed/rgb"
     zed_depth_path = "zed/depth"
 
-    intrinsics = np.array([
-        [700.0, 0, 320],  
-        [0, 700.0, 180],  
-        [0, 0, 1]         
-    ])
+    intrinsics = np.array([[700.0, 0, 320], [0, 700.0, 180], [0, 0, 1]])
 
-    with h5py.File(hdf5_file_path, 'r') as hdf:
-        zed_rgb = hdf[zed_dataset_path][0]  
-        zed_depth = hdf[zed_depth_path][0]  
+    with h5py.File(hdf5_file_path, "r") as hdf:
+        zed_rgb = hdf[zed_dataset_path][0]
+        zed_depth = hdf[zed_depth_path][0]
 
-    points, colors = depth_to_pointcloud(zed_depth, zed_rgb, intrinsics, camera_to_world)
+    points, colors = depth_to_pointcloud(
+        zed_depth, zed_rgb, intrinsics, camera_to_world
+    )
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
