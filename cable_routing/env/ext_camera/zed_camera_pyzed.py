@@ -1,5 +1,5 @@
-import pyzed.sl as sl
 from autolab_core import CameraIntrinsics, PointCloud, RgbCloud
+import pyzed.sl as sl
 
 class Zed:
     def __init__(self, flip_mode, resolution, fps, cam_id=None, recording_file=None, start_time=0.0):

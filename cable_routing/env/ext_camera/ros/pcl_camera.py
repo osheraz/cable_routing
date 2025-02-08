@@ -1,129 +1,10 @@
 import rospy
-from sensor_msgs.msg import PointCloud2, CameraInfo, Image
-import matplotlib.pyplot as plt
-from image_utils import image_msg_to_numpy
-from pcl_utils import PointCloudPublisher
-
-import torch
 import cv2
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
-from zed_camera import ZedCameraSubscriber
-
-np.set_printoptions(suppress=True, formatter={'float_kind': '{: .3f}'.format})
-
-
-class PointCloudGenerator:
-    def __init__(self, 
-                 camera_info_topic='/zedm/zed_node/depth/camera_info',
-                 sample_num=None,  depth_max=None, input_type='depth', device='cpu'):
-
-
-        if camera_info_topic is not None:
-            camera_info = rospy.wait_for_message(camera_info_topic, CameraInfo)
-
-            # Extract camera properties from CameraInfo message
-            self.cam_width = camera_info.width
-            self.cam_height = camera_info.height
-            self.fu = camera_info.K[0]  # fx
-            self.fv = camera_info.K[4]  # fy
-            self.cu = camera_info.K[2]  # cx
-            self.cv = camera_info.K[5]  # cy
-
-            # Extract projection matrix (3x4)
-            proj_matrix_ros = camera_info.P
-            self.proj_matrix = torch.tensor(proj_matrix_ros).reshape(3, 4).to(device)
-
-        else:
-            # Fallback if no ROS info is available
-            raise ValueError('Camera info not available')
-
-        # * -1 fu
-        self.int_mat = torch.Tensor(
-            [[self.fu, 0, self.cu],
-             [0, self.fv, self.cv],
-             [0, 0, 1]]
-        )
-        
-
-        # TODO get from calib
-        self.ext_mat = torch.tensor([[0.000737, -0.178996, 0.983850, 0.086292],
-                                     [-0.999998, 0.001475, 0.001017, 0.022357],
-                                 [-0.001633, -0.983849, -0.178995, 0.001017],
-                                     [0., 0., 0., 1.]], dtype=torch.float32).to(device)
-
-        def get_rotation_matrix(roll, pitch, yaw):
-            roll, pitch, yaw = torch.tensor(roll), torch.tensor(pitch), torch.tensor(yaw)
-            R_x = torch.tensor(
-                [[1, 0, 0], [0, torch.cos(roll), -torch.sin(roll)], [0, torch.sin(roll), torch.cos(roll)]],
-                dtype=torch.float32)
-            R_y = torch.tensor(
-                [[torch.cos(pitch), 0, torch.sin(pitch)], [0, 1, 0], [-torch.sin(pitch), 0, torch.cos(pitch)]],
-                dtype=torch.float32)
-            R_z = torch.tensor([[torch.cos(yaw), -torch.sin(yaw), 0], [torch.sin(yaw), torch.cos(yaw), 0], [0, 0, 1]],
-                               dtype=torch.float32)
-            return torch.mm(R_z, torch.mm(R_y, R_x))
-
-        # roll, pitch, yaw = 0.00, 0.0, 0.0
-        # rotation_tilt = get_rotation_matrix(roll, pitch, yaw)
-        # new_rot = torch.mm(rotation_tilt, self.ext_mat[:3, :3])
-        # self.ext_mat = torch.cat([torch.cat([new_rot, self.ext_mat[:3, 3:]], dim=1), self.ext_mat[3:, :]], dim=0).T
-
-        self.int_mat_T_inv = torch.inverse(self.int_mat.T).to(device)
-        self.depth_max = depth_max
-
-        x, y = torch.meshgrid(torch.arange(self.cam_height), torch.arange(self.cam_width))
-        self._uv_one = torch.stack((y, x, torch.ones_like(x)), dim=-1).float().to(device)
-
-        self._uv_one_in_cam = self._uv_one @ self.int_mat_T_inv
-
-        self._uv_one_in_cam = self._uv_one_in_cam.repeat(1, 1, 1)
-        self.sample_num = sample_num
-        self.device = device
-
-        self.input_type = input_type
-
-    def convert(self, points):
-        # Process depth buffer
-        points = torch.tensor(points, device=self.device, dtype=torch.float32)
-
-        if self.input_type == 'depth':
-            if self.depth_max is not None:
-                valid_ids = points > self.depth_max
-            else:
-                valid_ids = torch.ones(points.shape, dtype=bool, device=self.device)
-
-            valid_depth = points[valid_ids]  # TODO
-            uv_one_in_cam = self._uv_one_in_cam[valid_ids]
-
-            # Calculate 3D points in camera coordinates
-            pts_in_cam = torch.mul(uv_one_in_cam, valid_depth.unsqueeze(-1))
-        else:
-            # already pcl
-            pts_in_cam = points
-
-        # R_flip_y_up = torch.tensor([
-        #     [0, -1, 0],
-        #     [1, 0, 0],
-        #     [0, 0, 1]
-        # ], dtype=torch.float32, device=points.device)
-        #
-        # # Apply the rotation to convert to Y-up coordinate system
-        # pts_in_cam = torch.matmul(pts_in_cam[:, :3], R_flip_y_up.T)
-
-        # plot_point_cloud(pts_in_cam.cpu().detach().numpy())
-
-        pts_in_cam = torch.cat((pts_in_cam,
-                                torch.ones(*pts_in_cam.shape[:-1], 1,
-                                           device=pts_in_cam.device)),
-                               dim=-1)
-
-        pts_in_world = torch.matmul(pts_in_cam, self.ext_mat)
-
-        pcd_pts = pts_in_world[:, :3]
-        # plot_point_cloud(pcd_pts.cpu().detach().numpy())
-
-        return pcd_pts.cpu().detach().numpy()
+from sensor_msgs.msg import Image
+from image_utils import image_msg_to_numpy
+from cable_routing.env.ext_camera.ros.utils.pcl_utils import PointCloudPublisher, PointCloudGenerator
 
 
 class ZedPointCloudSubscriber:
@@ -191,7 +72,6 @@ class ZedPointCloudSubscriber:
                         '/zedm/zed_node/depth/depth_registered'))
         return self.depth
     
-    
     def get_com(self, pcl):
 
         nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(pcl)
@@ -201,7 +81,6 @@ class ZedPointCloudSubscriber:
         weighted_center = np.average(pcl, axis=0, weights=weights)
 
         return weighted_center
-
 
     def _rgb_subscriber_callback(self, msg):
         try:
@@ -216,7 +95,6 @@ class ZedPointCloudSubscriber:
             self.depth = cv2.resize(frame, (self.w, self.h), interpolation=cv2.INTER_AREA)
         except Exception as e:
             print(e)
-
 
     def to_pcl(self, frame):
 

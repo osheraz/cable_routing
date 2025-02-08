@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from autolab_core import CameraIntrinsics
 from cable_routing.configs.envconfig import BrioConfig
 import cv2
-import time
 import os
 
 logger = logging.getLogger(__name__)
