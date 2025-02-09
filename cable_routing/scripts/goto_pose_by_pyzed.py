@@ -16,12 +16,12 @@ import pyzed.sl as sl
 import tyro
 
 # TODO make relative.
-world_to_extrinsic_zed_path = '/home/osheraz/cable_routing/data/zed/zed2world.tf'
+world_to_extrinsic_zed_path = "/home/osheraz/cable_routing/data/zed/zed2world.tf"
 world_to_extrinsic_zed = RigidTransform.load(world_to_extrinsic_zed_path).inverse()
 
 
 def setup_zed_camera(camera_parameters):
-    """ Sets up the ZED camera with the given parameters. """
+    """Sets up the ZED camera with the given parameters."""
     zed = Zed(
         flip_mode=camera_parameters.flip_mode,
         resolution=camera_parameters.resolution,
@@ -35,14 +35,32 @@ def setup_zed_camera(camera_parameters):
 
 
 def click_event(event, u, v, flags, param):
-    """ Handles mouse click events to get pixel coordinates. """
+    """Handles mouse click events to get pixel coordinates."""
     if event == cv2.EVENT_LBUTTONDOWN:
         pixel_value = param["img"][v, u]
         print(f"Pixel coordinates: (u={u}, v={v}) - Pixel value: {pixel_value}")
 
         font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(param["img"], f"({u},{v})", (u, v), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(param["img"], str(pixel_value), (u, v + 20), font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(
+            param["img"],
+            f"({u},{v})",
+            (u, v),
+            font,
+            0.5,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            param["img"],
+            str(pixel_value),
+            (u, v + 20),
+            font,
+            0.5,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
 
         time.sleep(0.5)
         param["u"] = u
@@ -50,8 +68,8 @@ def click_event(event, u, v, flags, param):
 
 
 def main(args: ExperimentConfig):
-    """ Main function to run the robot-camera interaction loop. """
-    
+    """Main function to run the robot-camera interaction loop."""
+
     # Initialize YuMi robot
     yumi = YuMiRobotEnv(args.robot_cfg)
     yumi.close_grippers()
@@ -62,7 +80,9 @@ def main(args: ExperimentConfig):
     zed = setup_zed_camera(camera_parameters)
 
     # Retrieve camera calibration parameters
-    calibration_params = zed.cam.get_camera_information().camera_configuration.calibration_parameters
+    calibration_params = (
+        zed.cam.get_camera_information().camera_configuration.calibration_parameters
+    )
     f_x, f_y = calibration_params.left_cam.fx, calibration_params.left_cam.fy
     c_x, c_y = calibration_params.left_cam.cx, calibration_params.left_cam.cy
 
@@ -94,7 +114,7 @@ def main(args: ExperimentConfig):
 
         # Transform point from camera to robot frame
         point = Point(np.array([X, Y, Z]), frame="world")
-        point_in_robot = world_to_extrinsic_zed * point 
+        point_in_robot = world_to_extrinsic_zed * point
         print("Point in robot frame:", point_in_robot.data)
 
         # Move the robot end-effector to the target point

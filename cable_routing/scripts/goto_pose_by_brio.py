@@ -1,113 +1,192 @@
-import sys
 import math
 import numpy as np
 import cv2
-import time
 import tyro
 from autolab_core import RigidTransform, Point, CameraIntrinsics
-from cable_routing.env.ext_camera.rgb_camera import BRIOSensor
+from cable_routing.env.ext_camera.brio_camera import BRIOSensor
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 from cable_routing.configs.envconfig import ExperimentConfig
+import copy
 
-# Constants
-TABLE_HEIGHT = 0.0582
-SCALE_FACTOR = 0.25  # Display scaling factor
-ZOOM_SIZE = 100  # Zoom-in region size
+TABLE_HEIGHT = 0.05  # 0.023
+BOARD_HEIGHT = 0.05  # 0.035
+SCALE_FACTOR = 0.25
 
-def get_world_coord_from_pixel_coord(pixel_coord, cam_intrinsics, cam_extrinsics):
+
+def get_world_coord_from_pixel_coord(
+    pixel_coord, cam_intrinsics, cam_extrinsics, board_rect
+):
     """
     Convert pixel coordinates to world coordinates using camera intrinsics and extrinsics.
+    Adjust height if inside the board region.
     """
     pixel_coord = np.array(pixel_coord)
-    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(np.r_[pixel_coord, 1.04 - TABLE_HEIGHT])
+    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(
+        np.r_[pixel_coord, 1.04 - TABLE_HEIGHT]
+    )
     point_3d_world = cam_extrinsics.matrix.dot(np.r_[point_3d_cam, 1.0])
     point_3d_world = point_3d_world[:3] / point_3d_world[3]
-    point_3d_world[-1] = TABLE_HEIGHT
+
+    if board_rect:
+        (x_min, y_min), (x_max, y_max) = board_rect[0]
+        if x_min < pixel_coord[0] < x_max and y_min < pixel_coord[1] < y_max:
+            point_3d_world[-1] = BOARD_HEIGHT
+
     return point_3d_world
+
+
+def draw_rectangle(event, x, y, flags, param):
+    """
+    Allows user to draw a rectangle to define the board region.
+    """
+    img, board_rect = param["img"], param["board_rect"]
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        param["rect_start"] = (x, y)
+        param["drawing"] = True
+
+    elif event == cv2.EVENT_MOUSEMOVE and param["drawing"]:
+        temp_img = img.copy()
+        cv2.rectangle(temp_img, param["rect_start"], (x, y), (0, 255, 0), 2)
+        cv2.imshow("Define Board Area", temp_img)
+
+    elif event == cv2.EVENT_LBUTTONUP:
+        param["rect_end"] = (x, y)
+        param["drawing"] = False
+        board_rect.append((param["rect_start"], param["rect_end"]))
+        cv2.rectangle(img, param["rect_start"], param["rect_end"], (0, 255, 0), 2)
+        cv2.imshow("Define Board Area", img)
+
 
 def click_event(event, x, y, flags, param):
     """
-    Handles mouse click events on the resized image.
-    Maps the clicked coordinates to the original image and stores them for later processing.
+    Maps the clicked point on the resized image back to the original resolution.
     """
     if event == cv2.EVENT_LBUTTONDOWN:
-        # Convert coordinates back to the original resolution
-        orig_x = int(x / SCALE_FACTOR)
-        orig_y = int(y / SCALE_FACTOR)
-        param["u"], param["v"] = orig_x, orig_y
+        param["u"], param["v"] = int(x / SCALE_FACTOR), int(y / SCALE_FACTOR)
 
-        # Display a zoomed-in view
-        original_frame = param["original_frame"]
-        half_zoom = ZOOM_SIZE // 2
-        roi = original_frame[max(0, orig_y - half_zoom):orig_y + half_zoom,
-                             max(0, orig_x - half_zoom):orig_x + half_zoom]
 
-        # if roi.shape[0] > 0 and roi.shape[1] > 0:
-        #     zoomed_roi = cv2.resize(roi, (ZOOM_SIZE * 4, ZOOM_SIZE * 4), interpolation=cv2.INTER_LINEAR)
-        #     cv2.imshow("Zoomed In View", zoomed_roi)
+def define_board_region(image):
+    """
+    Displays the image and allows user to draw a rectangle for the board region.
+    """
+    board_rect = []
+    param = {
+        "img": image.copy(),
+        "drawing": False,
+        "rect_start": None,
+        "rect_end": None,
+        "board_rect": board_rect,
+    }
+    cv2.imshow("Define Board Area", image)
+    cv2.setMouseCallback("Define Board Area", draw_rectangle, param)
+
+    while True:
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("s"):  # Press 's' to save
+            break
+        elif key == 27:  # Press 'ESC' to cancel
+            cv2.destroyAllWindows()
+            return None
+
+    cv2.destroyAllWindows()
+    return board_rect
+
+
+def select_target_point(image):
+    """
+    Displays the image and allows user to select a target point.
+    """
+    params = {"u": None, "v": None}
+    cv2.imshow("Select Target Point", image)
+    cv2.setMouseCallback("Select Target Point", click_event, param=params)
+
+    while params["u"] is None or params["v"] is None:
+        if cv2.waitKey(1) & 0xFF == 27:
+            cv2.destroyAllWindows()
+            return None
+
+    cv2.destroyAllWindows()
+    return [params["u"], params["v"]]
+
 
 def main(args: ExperimentConfig):
     """
     Main function to run the robot-camera interaction loop.
     """
 
-    # Initialize YuMi robot
     yumi = YuMiRobotEnv(args.robot_cfg)
     yumi.close_grippers()
     yumi.move_to_home()
+    yumi.open_grippers()
 
-    # Initialize BRIO camera
     brio_cam = BRIOSensor(device=0)
 
-    # Load camera extrinsics
-    T_CAM_BASE = RigidTransform.load("/home/osheraz/cable_routing/data/zed/brio_to_world.tf").as_frames(
-        from_frame="brio", to_frame="base_link"
+    T_CAM_BASE = RigidTransform.load(
+        "/home/osheraz/cable_routing/data/zed/brio_to_world.tf"
+    ).as_frames(from_frame="brio", to_frame="base_link")
+
+    CAM_INTR = CameraIntrinsics(
+        fx=args.camera_cfg.fx,
+        fy=args.camera_cfg.fy,
+        cx=args.camera_cfg.cx,
+        cy=args.camera_cfg.cy,
+        width=args.camera_cfg.width,
+        height=args.camera_cfg.height,
+        frame=args.camera_cfg.frame,
     )
-    print("Camera Extrinsics:\n", T_CAM_BASE)
 
-    # Load camera intrinsics
-    CAM_INTR = CameraIntrinsics(fx=args.camera_cfg.fx,
-                                fy=args.camera_cfg.fy,
-                                cx=args.camera_cfg.cx,
-                                cy=args.camera_cfg.cy,
-                                width=args.camera_cfg.width,
-                                height=args.camera_cfg.height,
-                                frame=args.camera_cfg.frame)
-
-    # Capture an image
     frame = brio_cam.read()
+    resized_frame = cv2.resize(
+        frame, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
+    )
 
-    # Resize the image for display
-    resized_frame = cv2.resize(frame, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA)
+    print("Draw a rectangle for the board area. Press 's' to continue.")
+    board_rect = define_board_region(resized_frame)
+    if board_rect is None:
+        return
 
-    # Display the resized image
-    params = {"original_frame": frame, "u": None, "v": None}
-    cv2.imshow("Resized Image", resized_frame)
-    cv2.setMouseCallback("Resized Image", click_event, param=params)
+    board_rect = [
+        (tuple(np.array(corner) / SCALE_FACTOR) for corner in rect)
+        for rect in board_rect
+    ]
 
-    while params["u"] is None or params["v"] is None:
-        if cv2.waitKey(1) & 0xFF == 27:  # Exit on ESC key
-            cv2.destroyAllWindows()
-            return
+    print("Select a target point.")
+    pixel_coord = select_target_point(resized_frame)
+    if pixel_coord is None:
+        return
 
-    # Compute the world coordinates from the selected pixel
-    pixel_coord = [params["u"], params["v"]]
-    world_coord = get_world_coord_from_pixel_coord(pixel_coord, CAM_INTR, T_CAM_BASE)
+    # Compute world coordinates
+    world_coord = get_world_coord_from_pixel_coord(
+        pixel_coord, CAM_INTR, T_CAM_BASE, board_rect
+    )
     print("World Coordinate: ", world_coord)
 
-    # Move the robot end-effector to the target point
-    target_pose = RigidTransform(rotation=RigidTransform.x_axis_rotation(math.pi), translation=world_coord)
-    target_pose.translation[2] += 0.2  # Move above the point
-    yumi.set_ee_pose(left_pose=target_pose)
+    # Determine which arm to use based on the y-coordinate
+    # arm = "right" if world_coord[1] < 0 else "left"
+    # yumi.single_hand_grasp(world_coord, slow_mode=True)
 
-    target_pose.translation[2] -= 0.1  # Move down to the point
-    yumi.set_ee_pose(left_pose=target_pose)
+    # Specify points
+    # world_coord_right = copy.deepcopy(world_coord)
+    # world_coord_left = world_coord
+    # world_coord_right[1] -= 0.15
+    # world_coord = ([world_coord_left, world_coord_right],)
 
-    input("Press Enter to continue...")
-    yumi.set_ee_pose(left_pose=yumi.get_ee_pose()[0])  # Move back to original pose
+    yumi.dual_hand_grasp(
+        world_coord=world_coord,
+        axis="y",
+        slow_mode=True,
+    )
+    # yumi.open_grippers()
+    world_coord[0] += 0.1
+    world_coord[2] += 0.1
 
-    cv2.destroyAllWindows()
+    yumi.move_dual_hand_to(world_coord, slow_mode=True)
+    input("Press Enter to return...")
 
-if __name__ == '__main__':
+    # yumi.move_to_home()
+
+
+if __name__ == "__main__":
     args = tyro.cli(ExperimentConfig)
     main(args)
