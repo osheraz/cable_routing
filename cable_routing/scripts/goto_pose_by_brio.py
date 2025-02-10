@@ -116,8 +116,6 @@ def main(args: ExperimentConfig):
     """
 
     yumi = YuMiRobotEnv(args.robot_cfg)
-    yumi.close_grippers()
-    yumi.move_to_home()
     yumi.open_grippers()
 
     brio_cam = BRIOSensor(device=0)
@@ -178,10 +176,11 @@ def main(args: ExperimentConfig):
         slow_mode=True,
     )
     # yumi.open_grippers()
-    world_coord[0] += 0.1
     world_coord[2] += 0.1
-
     yumi.move_dual_hand_to(world_coord, slow_mode=True)
+    world_coord[0] += 0.1
+    yumi.move_dual_hand_to(world_coord, slow_mode=True)
+
     input("Press Enter to return...")
 
     # yumi.move_to_home()

@@ -73,13 +73,19 @@ def play_videos_and_project_depth(
 if __name__ == "__main__":
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent.parent.parent
-    hdf5_file_path = project_root / "records" / "camera_data_20250206_174445_0.h5"
+    hdf5_file_path = project_root / "records" / "camera_data_20250209_155027_0.h5"
 
     brio_dataset_path = "brio/rgb"
     zed_dataset_path = "zed/rgb"
     zed_depth_path = "zed/depth"
 
-    zed_intrinsics = np.array([[700.0, 0, 320], [0, 700.0, 180], [0, 0, 1]])
+    zed_intrinsics = np.array(
+        [
+            [366.24786376953125, 0.0, 323.66802978515625],
+            [0.0, 366.24786376953125, 174.6563262939453],
+            [0.0, 0.0, 1.0],
+        ]
+    )
 
     zed_to_world_path = project_root / "data" / "zed" / "zed2world.tf"
     camera_to_world = RigidTransform.load(zed_to_world_path)

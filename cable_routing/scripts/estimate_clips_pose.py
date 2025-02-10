@@ -83,21 +83,26 @@ def main():
 
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent.parent
-    hdf5_file_path = project_root / "records" / "camera_data_20250206_174445_0.h5"
+    hdf5_file_path = project_root / "records" / "camera_data_20250209_155027_0.h5"
     zed_to_world_path = project_root / "data" / "zed" / "zed2world.tf"
     camera_to_world = RigidTransform.load(zed_to_world_path)
 
     zed_dataset_path = "zed/rgb"
     zed_depth_path = "zed/depth"
 
-    intrinsics = np.array([[700.0, 0, 320], [0, 700.0, 180], [0, 0, 1]])
-
+    zed_intrinsics = np.array(
+        [
+            [366.24786376953125, 0.0, 323.66802978515625],
+            [0.0, 366.24786376953125, 174.6563262939453],
+            [0.0, 0.0, 1.0],
+        ]
+    )
     with h5py.File(hdf5_file_path, "r") as hdf:
         zed_rgb = hdf[zed_dataset_path][0]
         zed_depth = hdf[zed_depth_path][0]
 
     points, colors = depth_to_pointcloud(
-        zed_depth, zed_rgb, intrinsics, camera_to_world
+        zed_depth, zed_rgb, zed_intrinsics, camera_to_world
     )
 
     pcd = o3d.geometry.PointCloud()

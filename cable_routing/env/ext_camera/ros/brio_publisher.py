@@ -4,17 +4,18 @@ from cv_bridge import CvBridge
 import threading
 from cable_routing.env.ext_camera.brio_camera import BRIOSensor
 
+
 class CameraPublisher:
-    def __init__(self, device_id=0, name='camera_0', fps=10, init_node=False):
+    def __init__(self, device_id=0, name="camera_0", fps=10, init_node=False):
         if init_node:
-            rospy.init_node('camera_publisher', anonymous=True)
+            rospy.init_node("camera_publisher", anonymous=True)
 
         self.name = name
         self.running = False
         self.thread = None
         self.bridge = CvBridge()
         self.fps = fps
-        
+
         # Initialize the BRIO camera
         self.camera = BRIOSensor(device=device_id)
         self.width = self.camera.width
@@ -24,7 +25,9 @@ class CameraPublisher:
             return
 
         # Create the image publisher
-        self.image_pub = rospy.Publisher(f'/camera/{self.name}/image_raw', Image, queue_size=1)
+        self.image_pub = rospy.Publisher(
+            f"/camera/{self.name}/image_raw", Image, queue_size=1
+        )
         self.rate = rospy.Rate(self.fps)
 
         rospy.loginfo(f"Started camera publisher {self.name} at {self.fps} FPS")
@@ -66,17 +69,18 @@ class CameraPublisher:
     def __del__(self):
         """Cleanup camera resources"""
         self.stop()
-        if hasattr(self.camera, 'stop'):
+        if hasattr(self.camera, "stop"):
             self.camera.stop()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     try:
-        rospy.init_node('multi_camera_publisher')
-        camera0 = CameraPublisher(device_id=0, name='camera_0')
+        rospy.init_node("multi_camera_publisher")
+        camera0 = CameraPublisher(device_id=0, name="camera_0")
         camera0.start()
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
     finally:
-        if 'camera0' in locals():
+        if "camera0" in locals():
             camera0.stop()

@@ -9,14 +9,7 @@ from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
 class CameraDataCollector:
     def __init__(self, save_directory, file_prefix="camera_data", max_file_size=100):
-        """
-        Initialize the data collector.
-
-        Parameters:
-        - save_directory: Directory where HDF5 files will be saved.
-        - file_prefix: Prefix for the HDF5 filenames.
-        - max_file_size: Maximum size of each HDF5 file in MB.
-        """
+        """ """
         rospy.init_node("camera_data_collector", anonymous=True)
         self.save_directory = save_directory
         self.file_prefix = file_prefix

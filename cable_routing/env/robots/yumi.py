@@ -17,7 +17,8 @@ class YuMiRobotEnv:
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.move_to_home()
-        self.close_grippers()
+        self.interface.calibrate_grippers()
+        # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
     def move_to_home(self) -> None:
@@ -292,11 +293,10 @@ class YuMiRobotEnv:
 
         self.close_grippers(side="both", wait=True)
 
-        self.interface.yumi.set_speed(original_speed)
-
         target_pose_left.translation[2] += 0.1
         target_pose_right.translation[2] += 0.1
         self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
+        self.interface.yumi.set_speed(original_speed)
 
         print("Dual-hand grasp completed.")
 

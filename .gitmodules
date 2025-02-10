@@ -43,3 +43,6 @@
 [submodule "cable_routing/dependencies/phoxipy"]
 	path = cable_routing/dependencies/phoxipy
 	url = https://github.com/BerkeleyAutomation/phoxipy.git
+[submodule "dependencies/phoxipy"]
+	path = dependencies/phoxipy
+	url = https://github.com/BerkeleyAutomation/phoxipy.git

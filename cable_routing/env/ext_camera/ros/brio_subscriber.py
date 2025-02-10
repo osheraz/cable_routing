@@ -1,6 +1,6 @@
 import rospy
 from sensor_msgs.msg import Image
-from cable_routing.env.ext_camera.ros.image_utils import image_msg_to_numpy
+from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
 import threading
 
 
