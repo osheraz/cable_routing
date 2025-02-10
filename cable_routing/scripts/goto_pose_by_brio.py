@@ -12,8 +12,8 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     select_target_point,
 )
 
-TABLE_HEIGHT = 0.05  # 0.023
-BOARD_HEIGHT = 0.05  # 0.035
+TABLE_HEIGHT = 0.08  # 0.023
+BOARD_HEIGHT = 0.08  # 0.035
 
 
 def get_world_coord_from_pixel_coord(
@@ -103,6 +103,10 @@ def main(args: ExperimentConfig):
         axis="y",
         slow_mode=True,
     )
+    world_coord[2] += 0.1
+    world_coord[0] += 0.1
+    yumi.move_dual_hand_insertion(world_coord)
+    yumi.slide_hand(arm="left", axis="y", amount=0.1)
 
     world_coord[2] += 0.1
     world_coord[0] += 0.1

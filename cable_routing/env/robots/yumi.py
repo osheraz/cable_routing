@@ -37,6 +37,55 @@ class YuMiRobotEnv:
         """Closes both grippers."""
         self.interface.open_grippers(side)
 
+    def grippers_move_to(self, hand: Literal["left", "right", "both"], distance: int):
+        """
+        Move the specified gripper(s) to the given width [0, 25] (mm).
+
+        Parameters:
+        - hand (str): "left", "right", or "both" to specify which gripper(s) to move.
+        - distance (int): Desired gripper opening width in mm.
+        """
+        left, right = self.get_gripper_pose("both")
+        distance = int(distance)
+
+        if hand == "left":
+            self.interface.grippers_move_to(left_dist=distance, right_dist=right)
+        elif hand == "right":
+            self.interface.grippers_move_to(left_dist=left, right_dist=distance)
+        elif hand == "both":
+            self.interface.grippers_move_to(left_dist=distance, right_dist=distance)
+        else:
+            raise ValueError(
+                "Invalid hand argument. Choose from 'left', 'right', or 'both'."
+            )
+
+    def get_gripper_pose(
+        self, hand: Literal["left", "right", "both"]
+    ) -> Union[int, Tuple[int, int]]:
+        """
+        Get the current gripper position.
+
+        Parameters:
+        - hand (str): "left", "right", or "both" to specify which gripper(s) to retrieve.
+
+        Returns:
+        - int: If querying a single gripper, returns its position in mm.
+        - Tuple[int, int]: If querying both, returns a tuple (left_gripper, right_gripper).
+        """
+        if hand == "left":
+            return int(self.interface.driver_left.get_gripper_pos()) * 1000
+        elif hand == "right":
+            return int(self.interface.driver_right.get_gripper_pos()) * 1000
+        elif hand == "both":
+            return (
+                int(self.interface.driver_left.get_gripper_pos()) * 1000,
+                int(self.interface.driver_right.get_gripper_pos()) * 1000,
+            )
+        else:
+            raise ValueError(
+                "Invalid hand argument. Choose from 'left', 'right', or 'both'."
+            )
+
     def plan_linear_waypoints(
         self,
         arms: Literal["left", "right", "both"],
@@ -325,6 +374,62 @@ class YuMiRobotEnv:
         self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
         self.interface.yumi.set_speed(original_speed)
 
+    def move_dual_hand_insertion(
+        self,
+        target_center: np.ndarray,
+        insertion_depth: float = 0.05,
+        insertion_axis: Literal["x", "y", "z"] = "z",
+        slow_mode: bool = False,
+    ) -> None:
+        self.move_dual_hand_to(target_center, slow_mode)
+
+        print("Both hands have reached the target. Performing insertion...")
+
+        axis_index = {"x": 0, "y": 1, "z": 2}[insertion_axis]
+        target_center[axis_index] -= insertion_depth
+
+        self.move_dual_hand_to(target_center, slow_mode=True)
+
+        print(
+            f"Insertion completed along {insertion_axis}-axis by {insertion_depth} meters."
+        )
+
+    def slide_hand(
+        self,
+        arm: Literal["left", "right"],
+        axis: Literal["x", "y", "z"],
+        amount: float = 0.1,
+        gripper_opening: float = 5,
+    ) -> None:
+        """
+        Slides the specified arm along the given axis while slightly opening the gripper.
+
+        Parameters:
+        - arm (str): "left" or "right" indicating which hand to slide.
+        - axis (str): "x", "y", or "z" indicating the axis to slide along.
+        - amount (float): The distance to slide in meters.
+        - gripper_opening (float): How much to slightly open the gripper before sliding.
+        """
+
+        print(f"Sliding {arm} hand along {axis}-axis by {amount} meters.")
+
+        current_pose = self.interface.get_FK(arm)
+        cur_gripper_pos = self.get_gripper_pose(arm)  # close 0 - 25 open
+
+        self.grippers_move_to(arm, distance=cur_gripper_pos + gripper_opening)
+        time.sleep(0.5)
+
+        axis_index = {"x": 0, "y": 1, "z": 2}[axis]
+        current_pose.translation[axis_index] += amount
+
+        if arm == "left":
+            self.set_ee_pose(left_pose=current_pose)
+        else:
+            self.set_ee_pose(right_pose=current_pose)
+
+        time.sleep(0.5)  # Wait before closing
+        self.interface.close_grippers(side=arm)
+
 
 def main(args: ExperimentConfig):
     """Main function to test all YuMiRobotEnv functionalities."""
@@ -334,7 +439,9 @@ def main(args: ExperimentConfig):
 
     print("\n--- Initializing YuMi ---\n")
     yumi_env.move_to_home()
+    yumi_env.open_grippers()
 
+    yumi_env.grippers_move_to("left", 5)
     # Print FK for both arms
     print("\n--- Forward Kinematics ---")
     left_pose, right_pose = yumi_env.get_ee_pose()

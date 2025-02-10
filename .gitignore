@@ -20,7 +20,6 @@ debugging_output/*
 data/yumi_new/yumi_fix.usd
 debug/
 
-# Ignore Python cache files
 __pycache__/
 *.pyc
 *.pyo
