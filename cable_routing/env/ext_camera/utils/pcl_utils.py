@@ -1,6 +1,6 @@
 import open3d as o3d
 import numpy as np
-from autolab_core import RigidTransform
+import cv2
 
 
 def visualize_pointcloud(points, colors):
@@ -14,7 +14,7 @@ def visualize_pointcloud(points, colors):
     o3d.visualization.draw_geometries([pcd, axis, grid])
 
 
-def depth_to_pointcloud(depth_map, rgb_image, intrinsics, transform, max_depth=0.5):
+def depth_to_pointcloud(depth_map, rgb_image, intrinsics, transform, max_depth=1.2):
 
     height, width = depth_map.shape
     fx, fy = intrinsics[0, 0], intrinsics[1, 1]
@@ -34,6 +34,7 @@ def depth_to_pointcloud(depth_map, rgb_image, intrinsics, transform, max_depth=0
     points_homogeneous = np.hstack((points, np.ones((points.shape[0], 1))))
     points_world = (transform.matrix @ points_homogeneous.T).T[:, :3]
 
+    rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
     rgb_image = rgb_image.astype(np.float32) / 255.0
     rgb_image = rgb_image.reshape(-1, 3)
     colors = rgb_image[valid_flat]

@@ -73,7 +73,9 @@ def play_videos_and_project_depth(
 if __name__ == "__main__":
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent.parent.parent
-    hdf5_file_path = project_root / "records" / "camera_data_20250209_155027_0.h5"
+    hdf5_file_path = (
+        project_root / "records" / "new" / "camera_data_20250209_155027_0.h5"
+    )
 
     brio_dataset_path = "brio/rgb"
     zed_dataset_path = "zed/rgb"

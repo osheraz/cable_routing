@@ -5,6 +5,7 @@ import h5py
 from pathlib import Path
 from autolab_core import RigidTransform
 from cable_routing.env.ext_camera.utils.pcl_utils import depth_to_pointcloud
+import cv2
 
 
 def color_segment_fixtures(point_cloud, color_threshold=(0.1, 0.1, 0.1)):
@@ -87,26 +88,38 @@ def main():
         project_root / "records" / "new" / "camera_data_20250209_155027_0.h5"
     )
 
-    zed_to_world_path = project_root / "data" / "zed" / "zed2world.tf"
-    zed_to_world = RigidTransform.load(zed_to_world_path)
-
     brio_to_world_path = project_root / "data" / "brio" / "brio2world.tf"
     brio_to_world = RigidTransform.load(brio_to_world_path)
 
-    zed_intrinsics = np.array(
+    brio_intrinsics = np.array(
         [
-            [366.24786376953125, 0.0, 323.66802978515625],
-            [0.0, 366.24786376953125, 174.6563262939453],
+            [3.43246678e03, 0.0, 1.79637288e03],
+            [0.0, 3.44478930e03, 1.08661527e03],
             [0.0, 0.0, 1.0],
         ]
     )
 
     with h5py.File(hdf5_file_path, "r") as hdf:
-        zed_rgb = hdf["zed/rgb"][0]
-        zed_depth = hdf["zed/depth"][0]
+        brio_rgb = hdf["brio/rgb"][0]
 
+    SCALE_FACTOR = 0.25
+    brio_rgb = cv2.resize(
+        brio_rgb, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
+    )
+
+    brio_depth = np.full(brio_rgb.shape[:2], 1.0, dtype=np.float32)
+
+    def rescale_intrinsics(K, scale_factor):
+        K_rescaled = K.copy()
+        K_rescaled[0, 0] *= scale_factor  # Scale fx
+        K_rescaled[1, 1] *= scale_factor  # Scale fy
+        K_rescaled[0, 2] *= scale_factor  # Scale cx
+        K_rescaled[1, 2] *= scale_factor  # Scale cy
+        return K_rescaled
+
+    brio_intrinsics = rescale_intrinsics(brio_intrinsics, SCALE_FACTOR)
     points, colors = depth_to_pointcloud(
-        zed_depth, zed_rgb, zed_intrinsics, zed_to_world
+        brio_depth, brio_rgb, brio_intrinsics, brio_to_world
     )
 
     pcd = o3d.geometry.PointCloud()

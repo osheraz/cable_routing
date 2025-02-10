@@ -1,8 +1,8 @@
-import open3d as o3d
-import numpy as np
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
-from cable_routing.env.ext_camera.ros.image_utils import image_msg_to_numpy
+import open3d as o3d
+import numpy as np
+from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
 
 
 class ZedCameraSubscriber:
