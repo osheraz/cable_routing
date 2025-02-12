@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-SCALE_FACTOR = 0.25
+SCALE_FACTOR = 0.5
 
 
 def draw_rectangle(event, x, y, flags, param):

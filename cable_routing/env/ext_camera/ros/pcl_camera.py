@@ -3,7 +3,7 @@ import cv2
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 from sensor_msgs.msg import Image
-from image_utils import image_msg_to_numpy
+from cable_routing.env.ext_camera.ros.utils import image_msg_to_numpy
 from cable_routing.env.ext_camera.ros.utils.pcl_utils import PointCloudPublisher, PointCloudGenerator
 
 

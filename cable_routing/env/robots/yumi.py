@@ -282,11 +282,11 @@ class YuMiRobotEnv:
         self.close_grippers(side=arm, wait=True)
         self.interface.yumi.set_speed(original_speed)
 
-        target_pose.translation[2] += 0.05
-        self.set_ee_pose(
-            left_pose=target_pose if arm == "left" else None,
-            right_pose=target_pose if arm == "right" else None,
-        )
+        # target_pose.translation[2] += 0.05
+        # self.set_ee_pose(
+        #     left_pose=target_pose if arm == "left" else None,
+        #     right_pose=target_pose if arm == "right" else None,
+        # )
 
         print(f"{arm.capitalize()} arm grasp completed.")
 

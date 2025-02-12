@@ -5,6 +5,8 @@ import h5py
 from pathlib import Path
 from autolab_core import RigidTransform
 from cable_routing.env.ext_camera.utils.pcl_utils import depth_to_pointcloud
+from cable_routing.configs.envconfig import BrioConfig
+
 import cv2
 
 
@@ -129,13 +131,7 @@ def main():
     brio_to_world_path = project_root / "data" / "brio" / "brio2world.tf"
     brio_to_world = RigidTransform.load(brio_to_world_path)
 
-    brio_intrinsics = np.array(
-        [
-            [3.43246678e03, 0.0, 1.79637288e03],
-            [0.0, 3.44478930e03, 1.08661527e03],
-            [0.0, 0.0, 1.0],
-        ]
-    )
+    brio_intrinsics = BrioConfig.get_intrinsic_matrix()
 
     with h5py.File(hdf5_file_path, "r") as hdf:
         brio_rgb = hdf["brio/rgb"][0]

@@ -89,6 +89,9 @@ if __name__ == "__main__":
         ]
     )
 
+    # K: [1508.93408203125, 0.0, 963.8297729492188, 0.0, 1508.93408203125,
+    #  554.3792114257812, 0.0, 0.0, 1.0]
+
     zed_to_world_path = project_root / "data" / "zed" / "zed2world.tf"
     camera_to_world = RigidTransform.load(zed_to_world_path)
 

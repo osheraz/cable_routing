@@ -1,20 +1,46 @@
-import sys
-import math
 import rospy
 import numpy as np
 import cv2
-import time
 from autolab_core import RigidTransform, Point
 from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
-from cable_routing.configs.envconfig import ExperimentConfig
 import tyro
-from cable_routing.env.ext_camera.ros.image_utils import image_msg_to_numpy
+from autolab_core import RigidTransform, Point, CameraIntrinsics
+from cable_routing.configs.envconfig import ExperimentConfig
+
+from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
 from sensor_msgs.msg import CameraInfo, Image
 
-# Load the transformation from the world frame to the ZED camera frame
-zed_to_world_path = "/home/osheraz/cable_routing/data/zed/zed2world.tf"
-world_to_zed = RigidTransform.load(zed_to_world_path).inverse()
+from cable_routing.env.ext_camera.utils.img_utils import (
+    SCALE_FACTOR,
+    define_board_region,
+    select_target_point,
+)
+
+TABLE_HEIGHT = 0.0  # 0.023
+BOARD_HEIGHT = 0.00  # 0.035
+
+
+def get_world_coord_from_pixel_coord(
+    pixel_coord, cam_intrinsics, cam_extrinsics, board_rect
+):
+    """
+    Convert pixel coordinates to world coordinates using camera intrinsics and extrinsics.
+    Adjust height if inside the board region.
+    """
+    pixel_coord = np.array(pixel_coord)
+    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(
+        np.r_[pixel_coord, 0.81 - TABLE_HEIGHT]
+    )
+    point_3d_world = cam_extrinsics.matrix.dot(np.r_[point_3d_cam, 1.0])
+    point_3d_world = point_3d_world[:3] / point_3d_world[3]
+
+    if board_rect:
+        (x_min, y_min), (x_max, y_max) = board_rect[0]
+        if x_min < pixel_coord[0] < x_max and y_min < pixel_coord[1] < y_max:
+            point_3d_world[-1] = BOARD_HEIGHT
+
+    return point_3d_world
 
 
 class ZedCameraSubscriber:
@@ -46,107 +72,84 @@ class ZedCameraSubscriber:
         except Exception as e:
             rospy.logerr(f"RGB callback error: {e}")
 
+    def get_rgb(self):
 
-def click_event(event, u, v, flags, param):
-    """Handles mouse click events to get pixel coordinates."""
-    if event == cv2.EVENT_LBUTTONDOWN:
-        pixel_value = param["img"][v, u]
-        print(f"Pixel coordinates: (u={u}, v={v}) - Pixel value: {pixel_value}")
-
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(
-            param["img"],
-            f"({u},{v})",
-            (u, v),
-            font,
-            0.5,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            param["img"],
-            str(pixel_value),
-            (u, v + 20),
-            font,
-            0.5,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
-
-        time.sleep(0.5)
-        param["u"] = u
-        param["v"] = v
+        return self.rgb_image
 
 
 def main(args: ExperimentConfig):
     """Main function to run the robot-camera interaction loop."""
     rospy.init_node("zed_yumi_integration")
 
-    # Initialize YuMi robot
     yumi = YuMiRobotEnv(args.robot_cfg)
     yumi.close_grippers()
-    yumi.move_to_home()
+    # yumi.open_grippers()
 
-    # Initialize ZED camera subscriber
     zed_cam = ZedCameraSubscriber()
 
-    # Wait for the first set of images to be received
     rospy.loginfo("Waiting for images from ZED camera...")
     while zed_cam.rgb_image is None or zed_cam.depth_image is None:
         rospy.sleep(0.1)
 
-    camera_info = rospy.wait_for_message("/zedm/zed_node/depth/camera_info", CameraInfo)
-    cam_width = camera_info.width
-    cam_height = camera_info.height
-    f_x = camera_info.K[0]  # fx
-    f_y = camera_info.K[4]  # fy
-    c_x = camera_info.K[2]  # cx
-    c_y = camera_info.K[5]  # cy
+    camera_info = rospy.wait_for_message("/zedm/zed_node/rgb/camera_info", CameraInfo)
 
-    for _ in tqdm(range(3)):
-        # Get the current end-effector pose
-        left_pose, _ = yumi.get_ee_pose()
-        previous_pose = left_pose  # Store for later use
+    T_CAM_BASE = RigidTransform.load(
+        "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
+    ).as_frames(from_frame="zed", to_frame="base_link")
 
-        # Get RGB and depth images
-        left_img = zed_cam.rgb_image
-        depth = zed_cam.depth_image
+    CAM_INTR = CameraIntrinsics(
+        fx=camera_info.K[0],
+        fy=camera_info.K[4],
+        cx=camera_info.K[2],
+        cy=camera_info.K[5],
+        width=camera_info.width,
+        height=camera_info.height,
+        frame="zed",
+    )
 
-        # Display image and wait for user selection
-        params = {"img": left_img.copy(), "u": None, "v": None}
-        cv2.imshow("Image", left_img)
-        cv2.setMouseCallback("Image", click_event, param=params)
+    frame = zed_cam.get_rgb()
+    resized_frame = cv2.resize(
+        frame, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
+    )
 
-        while params["u"] is None or params["v"] is None:
-            if cv2.waitKey(1) & 0xFF == 27:  # Exit on ESC key
-                break
+    print("Draw a rectangle for the board area. Press 's' to continue.")
+    board_rect = define_board_region(resized_frame)
+    if board_rect is None:
+        return
 
-        # Get user-selected pixel coordinates
-        u, v = params["u"], params["v"]
-        Z = depth[v, u]
-        X = ((u - c_x) * Z) / f_x
-        Y = ((v - c_y) * Z) / f_y
-        print(f"Projected point: X={X}, Y={Y}, Z={Z}")
+    board_rect = [
+        (tuple(np.array(corner) / SCALE_FACTOR) for corner in rect)
+        for rect in board_rect
+    ]
 
-        # Transform point from camera to robot frame
-        point = Point(np.array([X, Y, Z]), frame="world")
-        point_in_robot = world_to_zed * point
-        print("Point in robot frame:", point_in_robot.data)
+    print("Select a target point.")
+    pixel_coord = select_target_point(resized_frame)
+    if pixel_coord is None:
+        return
 
-        # Move the robot end-effector to the target point
-        # target_pose = RigidTransform(rotation=RigidTransform.x_axis_rotation(math.pi), translation=point_in_robot.data)
-        # target_pose.translation[2] += 0.2  # Move above the point
-        # yumi.set_ee_pose(left_pose=target_pose)
+    world_coord = get_world_coord_from_pixel_coord(
+        pixel_coord, CAM_INTR, T_CAM_BASE, board_rect
+    )
 
-        # target_pose.translation[2] -= 0.2  # Move down to the point
-        # yumi.set_ee_pose(left_pose=target_pose)
+    print("World Coordinate: ", world_coord)
 
-        # input("Press Enter to continue...")
-        # yumi.set_ee_pose(left_pose=previous_pose)  # Move back to original pose
+    yumi.single_hand_grasp(world_coord, slow_mode=True)
 
-    cv2.destroyAllWindows()
+    #     yumi.dual_hand_grasp(
+    #     world_coord=world_coord,
+    #     axis="y",
+    #     slow_mode=True,
+    # )
+    #     world_coord[2] += 0.1
+    #     world_coord[0] += 0.1
+    #     yumi.move_dual_hand_insertion(world_coord)
+    #     yumi.slide_hand(arm="left", axis="y", amount=0.1)
+
+    #     world_coord[2] += 0.1
+    #     world_coord[0] += 0.1
+    #     yumi.move_dual_hand_to(world_coord, slow_mode=True)
+
+    input("Press Enter to return...")
 
 
 if __name__ == "__main__":

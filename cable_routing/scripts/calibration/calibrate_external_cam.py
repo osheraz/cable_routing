@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from autolab_core import RigidTransform
+from cable_routing.env.ext_camera.zed_camera_pyzed import Zed
 import tyro
 
 
@@ -75,7 +76,7 @@ aruco_to_world = {
 }
 
 
-def main(is_zed: bool, image_path: str = None, tag_size: float = TAG_SIZE):
+def main(is_zed: bool = True, image_path: str = None, tag_size: float = TAG_SIZE):
     # tag size is side length in meters
     # Camera intrinsics (you can obtain these from camera calibration)
 
@@ -84,12 +85,14 @@ def main(is_zed: bool, image_path: str = None, tag_size: float = TAG_SIZE):
         camera_matrix = X["camera_matrix"]
         dist_coeffs = X["dist_coeffs"]  # Assuming no lens distortion
     else:
-        # zed = Zed(flip_mode=False, cam_id=None, is_res_1080=False)
-        camera_matrix = np.load("path_to/zed_intr.npy")  # zed.get_K()
-        # intr_dict = zed.get_ns_intrinsics()
-        dist_coeffs = np.load(
-            "path_to/zed_dist_coeffs.npy"
-        )  # [intr_dict[key] for key in ["k1", "k2", "p1", "p2"]]
+        zed = Zed(flip_mode=False, cam_id=None)
+        camera_matrix = zed.get_K()
+        intr_dict = zed.get_ns_intrinsics()
+        dist_coeffs = [intr_dict[key] for key in ["k1", "k2", "p1", "p2"]]
+
+        # dist_coeffs = np.load(
+        #     "path_to/zed_dist_coeffs.npy"
+        # )  # [intr_dict[key] for key in ["k1", "k2", "p1", "p2"]]
 
     # Load image
     if image_path is None:
