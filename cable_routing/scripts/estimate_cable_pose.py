@@ -5,15 +5,21 @@ import numpy as np
 from sklearn.decomposition import PCA
 import cv2
 from autolab_core import RigidTransform
+from cable_routing.configs.envconfig import ZedMiniConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.env.ext_camera.utils.img_utils import (
     rescale_intrinsics,
     mask_image_outside_roi,
     green_color_segment,
 )
+from cable_routing.env.ext_camera.utils.pcl_utils import (
+    depth_to_pointcloud,
+    project_points_to_image,
+    overlay_skeleton_on_image,
+)
 
 
-def construct_skeletal_graph(cable_points, num_nodes=1000):
+def construct_skeletal_graph(cable_points, num_nodes=2000):
 
     pca = PCA(n_components=1)
     pca.fit(cable_points)
@@ -44,6 +50,11 @@ def main():
     cy = camera_info.K[5]
 
     intrinsic = o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy)
+    zed_config = ZedMiniConfig()
+    zed_intrinsic = zed_config.get_intrinsic_matrix()
+
+    print("ZED Intrinsic:", zed_intrinsic)
+    print("O3D Intrinsic:", intrinsic.intrinsic_matrix)
 
     T_CAM_BASE = RigidTransform.load(
         "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
@@ -90,9 +101,18 @@ def main():
 
     cable_pcd = o3d.geometry.PointCloud()
     cable_pcd.points = o3d.utility.Vector3dVector(cable_nodes)
-    cable_pcd.paint_uniform_color([0, 1, 0])
+    cable_pcd.paint_uniform_color([1, 0, 0])
 
     o3d.visualization.draw_geometries([pcd, cable_pcd])
+
+    cable_nodes_2d = project_points_to_image(
+        cable_nodes, zed_intrinsic, T_CAM_BASE, rgb_frame.shape[:2]
+    )
+
+    result_image = overlay_skeleton_on_image(rgb_frame, cable_nodes_2d)
+
+    cv2.imshow("Projected Skeleton", cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR))
+    cv2.waitKey(0)
 
 
 if __name__ == "__main__":

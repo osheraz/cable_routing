@@ -18,8 +18,8 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     select_target_point,
 )
 
-TABLE_HEIGHT = 0.1  # 0.023
-BOARD_HEIGHT = 0.1  # 0.035
+TABLE_HEIGHT = 0.05  # 0.023
+BOARD_HEIGHT = 0.05  # 0.035
 
 
 def get_world_coord_from_pixel_coord(
@@ -102,21 +102,22 @@ def main(args: ExperimentConfig):
 
     yumi.single_hand_grasp(world_coord, slow_mode=True)
 
-    #     yumi.dual_hand_grasp(
+    # yumi.dual_hand_grasp(
     #     world_coord=world_coord,
     #     axis="y",
     #     slow_mode=True,
     # )
-    #     world_coord[2] += 0.1
-    #     world_coord[0] += 0.1
-    #     yumi.move_dual_hand_insertion(world_coord)
-    #     yumi.slide_hand(arm="left", axis="y", amount=0.1)
+    # world_coord[2] += 0.1
+    # world_coord[0] += 0.1
+    # yumi.move_dual_hand_insertion(world_coord)
+    # yumi.slide_hand(arm="left", axis="y", amount=0.1)
 
-    #     world_coord[2] += 0.1
-    #     world_coord[0] += 0.1
-    #     yumi.move_dual_hand_to(world_coord, slow_mode=True)
+    # world_coord[2] += 0.1
+    # world_coord[0] += 0.1
+    # yumi.move_dual_hand_to(world_coord, slow_mode=True)
 
     input("Press Enter to return...")
+    yumi.move_to_home()
 
 
 if __name__ == "__main__":

@@ -63,8 +63,8 @@ class ZedMiniConfig:
     height: int = 1080
     frame: str = "zed"
     fx: float = 1508.93408203125
-    fy: float = 963.8297729492188
-    cx: float = 1508.93408203125
+    fy: float = 1508.93408203125
+    cx: float = 963.8297729492188
     cy: float = 554.3792114257812
     FPS: int = 30
 

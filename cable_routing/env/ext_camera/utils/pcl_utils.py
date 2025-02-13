@@ -1,6 +1,65 @@
 import open3d as o3d
 import numpy as np
 import cv2
+from autolab_core import RigidTransform
+
+
+def project_points_to_image(points_3d, intrinsics, extrinsics, image_shape):
+    """
+    Projects 3D points onto a 2D image.
+
+    Args:
+        points_3d (numpy.ndarray): Nx3 array of 3D points.
+        intrinsics (numpy.ndarray): 3x3 camera intrinsic matrix.
+        extrinsics (RigidTransform): Camera extrinsics (world to camera).
+        image_shape (tuple): (height, width) of the image.
+
+    Returns:
+        numpy.ndarray: Nx2 array of 2D projected points.
+    """
+    # Convert to homogeneous coordinates (Nx4)
+    points_homo = np.hstack((points_3d, np.ones((points_3d.shape[0], 1))))
+
+    # Transform points to camera coordinates
+    camera_points = extrinsics.inverse().matrix @ points_homo.T
+    camera_points = camera_points[:3, :]
+
+    # Project to 2D using intrinsics
+    pixels = intrinsics @ camera_points
+    pixels[:2, :] /= pixels[2, :]  # Normalize by depth
+
+    # Convert to pixel coordinates
+    pixel_coords = pixels[:2, :].T.astype(int)
+
+    # Filter valid pixels within image bounds
+    valid_mask = (
+        (pixel_coords[:, 0] >= 0)
+        & (pixel_coords[:, 0] < image_shape[1])
+        & (pixel_coords[:, 1] >= 0)
+        & (pixel_coords[:, 1] < image_shape[0])
+    )
+
+    return pixel_coords[valid_mask]
+
+
+def overlay_skeleton_on_image(image, pixel_coords, color=(0, 255, 0)):
+    """
+    Draws the projected skeletal graph on the image.
+
+    Args:
+        image (numpy.ndarray): Input image.
+        pixel_coords (numpy.ndarray): Nx2 array of 2D points.
+        color (tuple): RGB color for drawing.
+
+    Returns:
+        numpy.ndarray: Image with overlaid skeletal graph.
+    """
+    output_image = image.copy()
+
+    for point in pixel_coords:
+        cv2.circle(output_image, tuple(point), radius=2, color=color, thickness=-1)
+
+    return output_image
 
 
 def visualize_pointcloud(points, colors):

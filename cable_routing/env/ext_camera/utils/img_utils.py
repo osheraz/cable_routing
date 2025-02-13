@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
 
-SCALE_FACTOR = 0.5
+SCALE_FACTOR = 1.0
 
 
 def green_color_segment(point_cloud, display=True):
+
     points = np.asarray(point_cloud.points)
     colors = np.asarray(point_cloud.colors)
 
@@ -13,7 +14,7 @@ def green_color_segment(point_cloud, display=True):
     blue = colors[:, 2]
 
     green_dominance = green - (red + blue) / 2
-    mask = (green_dominance > 0.05) & (green > 0.2)
+    mask = (green_dominance > 0.05) & (green > 0.3)
 
     fixture_points = points[mask]
 

@@ -1,13 +1,16 @@
 import open3d as o3d
 import numpy as np
 from sklearn.decomposition import PCA
-from pycpd import RigidRegistration
 import h5py
 import cv2
 from pathlib import Path
 from autolab_core import RigidTransform
 from cable_routing.configs.envconfig import BrioConfig
-from cable_routing.env.ext_camera.utils.pcl_utils import depth_to_pointcloud
+from cable_routing.env.ext_camera.utils.pcl_utils import (
+    depth_to_pointcloud,
+    project_points_to_image,
+    overlay_skeleton_on_image,
+)
 from cable_routing.env.ext_camera.utils.img_utils import (
     rescale_intrinsics,
     mask_image_outside_roi,
@@ -25,12 +28,6 @@ def construct_skeletal_graph(cable_points, num_nodes=1000):
     node_indices = np.linspace(0, len(cable_points_sorted) - 1, num_nodes, dtype=int)
     cable_nodes = cable_points_sorted[node_indices]
     return cable_nodes
-
-
-def apply_cpd(source_nodes, target_nodes):
-    reg = RigidRegistration(X=source_nodes, Y=target_nodes)
-    transformed_nodes, _ = reg.register()
-    return transformed_nodes
 
 
 def main():
@@ -89,6 +86,16 @@ def main():
     cable_pcd.paint_uniform_color([0, 1, 0])
 
     o3d.visualization.draw_geometries([pcd, cable_pcd])
+
+    cable_nodes_2d = project_points_to_image(
+        cable_nodes, brio_intrinsics, brio_to_world, brio_rgb.shape[:2]
+    )
+
+    result_image = overlay_skeleton_on_image(brio_rgb, cable_nodes_2d)
+
+    cv2.imshow("Projected Skeleton", result_image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
