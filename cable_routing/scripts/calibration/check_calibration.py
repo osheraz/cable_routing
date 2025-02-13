@@ -1,67 +1,63 @@
 import cv2
 import numpy as np
-from autolab_core import RigidTransform, Point, CameraIntrinsics
 import os
-import tyro
-from yumi_jacobi.interface import Interface
-from cable_routing.env.ext_camera.rgb_camera import CameraThread
 import time
-from cable_routing.env.ext_camera.zed_camera_pyzed import Zed
+import tyro
+import rospy
+from autolab_core import RigidTransform, Point, CameraIntrinsics
+from yumi_jacobi.interface import Interface
+from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
+from sensor_msgs.msg import CameraInfo
 
 
-def main(is_zed: bool):
-    cam_name = "zed" if is_zed else "brio"
+def main():
+    cam_name = "zed"
 
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    config_dir = os.path.join(script_dir, os.pardir, f"camera_info/{cam_name}")
-    save_dir = os.path.join(config_dir, "test_calibration")
+    save_dir = os.path.join(script_dir, "test_calibration")
     os.makedirs(save_dir, exist_ok=True)
-    camera_to_world = RigidTransform.load(os.path.join(config_dir, f"{cam_name}2world.tf"))
-    
-    if is_zed:
-        zed = Zed(flip_mode=False, cam_id=None, is_res_1080=False)
-    else:
-        camera_thread = CameraThread(camera_index=0, fps=30)
-        camera_thread.start()
-    # camera_thread.change_focus(60)
-    
-    if is_zed:
-        camera_matrix = zed.get_K()
-        dist_coeffs = zed.get_dist_coeffs()
-    else:
-        intrinsics = np.load(os.path.join(config_dir, "camera_calibration.npz"))
-        camera_matrix = intrinsics["camera_matrix"]
-        dist_coeffs = intrinsics["dist_coeffs"]
 
-    yumi_jacobi_dir = os.path.join(
-        script_dir,
-        os.pardir,
-        "dependencies/yumi_jacobi/starter_examples/AUTOLAB_BWW_YuMi_1.jacobi-project",
+    rospy.init_node("zed_calibration_checker", anonymous=True)
+
+    # Initialize ZED Camera Subscriber
+    zed_cam = ZedCameraSubscriber()
+
+    rospy.loginfo("Waiting for images from ZED camera...")
+    while zed_cam.rgb_image is None or zed_cam.depth_image is None:
+        rospy.sleep(0.1)
+
+    # Get camera intrinsics from ROS topic
+    camera_info = rospy.wait_for_message("/zedm/zed_node/rgb/camera_info", CameraInfo)
+
+    T_CAM_BASE = RigidTransform.load(
+        "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
+    ).as_frames(from_frame="zed", to_frame="base_link")
+
+    CAM_INTR = CameraIntrinsics(
+        fx=camera_info.K[0],
+        fy=camera_info.K[4],
+        cx=camera_info.K[2],
+        cy=camera_info.K[5],
+        width=camera_info.width,
+        height=camera_info.height,
+        frame="zed",
     )
+
+    frame = zed_cam.get_rgb()
 
     interface = Interface(
         speed=0.26,
-        file=yumi_jacobi_dir,
     )
 
     interface.home()
     interface.calibrate_grippers()
     interface.close_grippers()
 
-    
+    rot_mat = [[-1, 0, 0], [0, 0, 1], [0, 1, 0]]
+    wp1_l = RigidTransform(rotation=rot_mat, translation=[0.4, 0.1, 0.2])
+    wp2_l = RigidTransform(rotation=rot_mat, translation=[0.4, 0.0, 0.1])
+    wp3_l = RigidTransform(rotation=rot_mat, translation=[0.5, -0.1, 0.1])
 
-    wp1_l = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.4, 0.1, 0.2]
-    )
-    wp2_l = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.4, 0.1, 0.3]
-    )
-    wp3_l = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.5, 0.1, 0.2]
-    )
-
-    cfgs = []
-    wps = []
     for i in range(9):
         if i < 3:
             wp1_l.translation[1] -= 0.05
@@ -76,40 +72,31 @@ def main(is_zed: bool):
         interface.go_linear_single(r_target=curr_wp)
         time.sleep(1.0)
 
-        wps.append(curr_wp.copy())
-
-        # r_joints = interface.get_joint_positions("right")
-        # r_gripper = interface.driver_right.get_gripper_pos().copy()
-        # l_joints = interface.get_joint_positions("left")
-        # l_gripper = interface.driver_left.get_gripper_pos().copy()
-        # curr_cfg = [r_joints, r_gripper, l_joints, l_gripper]
-        # cfgs.append(curr_cfg.copy())
-
         gripper_in_world = interface.get_FK("right").translation
-        world_to_camera = camera_to_world.inverse()
+        world_to_camera = T_CAM_BASE.inverse()
 
-        # TODO: wrap this in a function to test without needing the robot code
-        gripper_in_camera = world_to_camera * Point(gripper_in_world, frame="world")
+        # Convert world coordinates to camera frame
+        gripper_in_camera = world_to_camera * Point(gripper_in_world, frame="base_link")
+
         gripper_point = np.array(
             [[gripper_in_camera.x, gripper_in_camera.y, gripper_in_camera.z]]
         )  # 3D point as a 1x3 array
+
         gripper_pixel, _ = cv2.projectPoints(
             gripper_point,
             np.zeros((3, 1)),
             np.zeros((3, 1)),
-            camera_matrix,
-            dist_coeffs,
+            CAM_INTR.K,
+            np.zeros(5),  # Assuming no distortion coefficients
         )
 
         print(gripper_pixel)
 
-        if is_zed:
-            img_l, _ = zed.get_rgb()
-            image = img_l 
-        else:
-            image = camera_thread.get_frame()
+        # Get the latest image from ZED
+        frame = zed_cam.get_rgb()
+
         image_with_point = cv2.circle(
-            image,
+            frame,
             (int(gripper_pixel[0][0][0]), int(gripper_pixel[0][0][1])),
             radius=15,
             color=(0, 0, 255),
@@ -118,18 +105,6 @@ def main(is_zed: bool):
 
         cv2.imwrite(f"{save_dir}/frame_{i:04d}.jpg", image_with_point)
 
-    # np.save(
-    #     os.path.join(save_dir, "wps.npy"),
-    #     tested_wps,
-    # )
-
-    # np.save(
-    #     os.path.join(save_dir, "cfgs.npy"),
-    #     tested_cfgs,
-    # )
-
-    if not is_zed:
-        camera_thread.stop()
     cv2.destroyAllWindows()
     exit()
 

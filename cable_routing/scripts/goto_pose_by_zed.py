@@ -23,23 +23,25 @@ BOARD_HEIGHT = 0.05  # 0.035
 
 
 def get_world_coord_from_pixel_coord(
-    pixel_coord, cam_intrinsics, cam_extrinsics, board_rect
+    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.7
 ):
-    """
-    Convert pixel coordinates to world coordinates using camera intrinsics and extrinsics.
-    Adjust height if inside the board region.
-    """
-    pixel_coord = np.array(pixel_coord)
-    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(
-        np.r_[pixel_coord, 0.81 - TABLE_HEIGHT]
-    )
-    point_3d_world = cam_extrinsics.matrix.dot(np.r_[point_3d_cam, 1.0])
-    point_3d_world = point_3d_world[:3] / point_3d_world[3]
+    pixel_coord = np.array(pixel_coord, dtype=np.float32)
 
-    if board_rect:
-        (x_min, y_min), (x_max, y_max) = board_rect[0]
-        if x_min < pixel_coord[0] < x_max and y_min < pixel_coord[1] < y_max:
-            point_3d_world[-1] = BOARD_HEIGHT
+    if image_shape and (
+        cam_intrinsics.width != image_shape[1]
+        or cam_intrinsics.height != image_shape[0]
+    ):
+        scale_x = cam_intrinsics.width / image_shape[1]
+        scale_y = cam_intrinsics.height / image_shape[0]
+        pixel_coord[0] *= scale_x
+        pixel_coord[1] *= scale_y
+
+    pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
+    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * table_depth
+
+    point_3d_world = (
+        cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
+    )
 
     return point_3d_world
 
@@ -90,12 +92,13 @@ def main(args: ExperimentConfig):
     ]
 
     print("Select a target point.")
-    pixel_coord = select_target_point(resized_frame)
+    pixel_coord = select_target_point(frame)
+    print("Pixel Coord:", pixel_coord)
     if pixel_coord is None:
         return
 
     world_coord = get_world_coord_from_pixel_coord(
-        pixel_coord, CAM_INTR, T_CAM_BASE, board_rect
+        pixel_coord, CAM_INTR, T_CAM_BASE  # , board_rect
     )
 
     print("World Coordinate: ", world_coord)

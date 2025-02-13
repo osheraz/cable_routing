@@ -8,16 +8,14 @@ from autolab_core import RigidTransform
 class YuMiTFPublisher:
     def __init__(self):
         rospy.init_node("yumi_tf_publisher", anonymous=True)
-        self.rate = rospy.Rate(100)  # 10 Hz
+        self.rate = rospy.Rate(100)
         self.br = tf.TransformBroadcaster()
         self.interface = Interface()
 
     def matrix_to_quaternion(self, rotation_matrix):
         """Converts a 3x3 rotation matrix to a quaternion."""
-        transformation_matrix = np.eye(4)  # Create a 4x4 identity matrix
-        transformation_matrix[:3, :3] = (
-            rotation_matrix  # Insert the 3x3 rotation matrix
-        )
+        transformation_matrix = np.eye(4)
+        transformation_matrix[:3, :3] = rotation_matrix
         return tf.transformations.quaternion_from_matrix(transformation_matrix)
 
     def publish_transforms(self):
@@ -28,22 +26,20 @@ class YuMiTFPublisher:
             ), self.interface.get_FK("right")
             base_link_pose = RigidTransform(rotation=np.eye(3), translation=[0, 0, 0])
 
-            # Publish base link transformation
             self.br.sendTransform(
                 base_link_pose.translation,
                 self.matrix_to_quaternion(base_link_pose.rotation),
                 rospy.Time.now(),
-                "base_link",
+                "yumi_base_link",
                 "world",
             )
 
-            # Publish left end-effector transformation
             self.br.sendTransform(
                 left_ee_pose.translation,
                 self.matrix_to_quaternion(left_ee_pose.rotation),
                 rospy.Time.now(),
                 "left_ee",
-                "base_link",
+                "yumi_base_link",
             )
 
             # Publish right end-effector transformation
@@ -52,7 +48,7 @@ class YuMiTFPublisher:
                 self.matrix_to_quaternion(right_ee_pose.rotation),
                 rospy.Time.now(),
                 "right_ee",
-                "base_link",
+                "yumi_base_link",
             )
 
             self.rate.sleep()

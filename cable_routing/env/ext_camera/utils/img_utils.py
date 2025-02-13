@@ -14,7 +14,7 @@ def green_color_segment(point_cloud, display=True):
     blue = colors[:, 2]
 
     green_dominance = green - (red + blue) / 2
-    mask = (green_dominance > 0.05) & (green > 0.3)
+    mask = (green_dominance > 0.07) & (green > 0.3)
 
     fixture_points = points[mask]
 
