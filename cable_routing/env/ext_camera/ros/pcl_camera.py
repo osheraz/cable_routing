@@ -3,29 +3,58 @@ import cv2
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 from sensor_msgs.msg import Image
-from cable_routing.env.ext_camera.ros.utils import image_msg_to_numpy
-from cable_routing.env.ext_camera.ros.utils.pcl_utils import PointCloudPublisher, PointCloudGenerator
+from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
+from sensor_msgs.msg import CameraInfo, Image
+from autolab_core import RigidTransform, Point, CameraIntrinsics
+from cable_routing.env.ext_camera.ros.utils.pcl_utils import (
+    PointCloudPublisher,
+    PointCloudGenerator,
+)
 
 
 class ZedPointCloudSubscriber:
 
-    def __init__(self,):
-        
+    def __init__(
+        self,
+    ):
+
         # TODO from cfg
-        self.far_clip = 0.5
-        self.near_clip = 0.1
-        self.dis_noise = 0.00
-        self.w = 640  
-        self.h = 360  
+        camera_info = rospy.wait_for_message(
+            "/zedm/zed_node/depth/camera_info", CameraInfo
+        )
+
+        self.intrinsic = CameraIntrinsics(
+            fx=camera_info.K[0],
+            fy=camera_info.K[4],
+            cx=camera_info.K[2],
+            cy=camera_info.K[5],
+            width=camera_info.width,
+            height=camera_info.height,
+            frame="zed",
+        )
+
+        self.w = camera_info.width
+        self.h = camera_info.height
 
         self.init_success = False
         self.last_cloud = None
 
-        self.pcl_gen = PointCloudGenerator(input_type='depth')
+        self.pcl_gen = PointCloudGenerator(input_type="depth")
 
-        self.pointcloud_pub = PointCloudPublisher(topic='/results/pointcloud')
-        self._rgb_subscriber = rospy.Subscriber('/zedm/zed_node/rgb/image_rect_color', Image, self._rgb_subscriber_callback, queue_size=2)
-        self._depth_subscriber = rospy.Subscriber('/zedm/zed_node/depth/depth_registered', Image, self._depth_subscriber_callback, queue_size=2)
+        self.pointcloud_pub = PointCloudPublisher(topic="/results/pointcloud")
+
+        self._rgb_subscriber = rospy.Subscriber(
+            "/zedm/zed_node/rgb/image_rect_color",
+            Image,
+            self._rgb_subscriber_callback,
+            queue_size=2,
+        )
+        self._depth_subscriber = rospy.Subscriber(
+            "/zedm/zed_node/depth/depth_registered",
+            Image,
+            self._depth_subscriber_callback,
+            queue_size=2,
+        )
         self._check_depth_camera_ready()
 
         self.timer = rospy.Timer(rospy.Duration(0.01), self.timer_callback)
@@ -37,44 +66,65 @@ class ZedPointCloudSubscriber:
 
         self.raw_frame = None
         rospy.logdebug(
-            "Waiting for '{}' to be READY...".format('/zedm/zed_node/rgb/image_rect_color'))
+            "Waiting for '{}' to be READY...".format(
+                "/zedm/zed_node/rgb/image_rect_color"
+            )
+        )
         while self.raw_frame is None and not rospy.is_shutdown():
             try:
                 self.raw_frame = rospy.wait_for_message(
-                    '{}'.format('/zedm/zed_node/rgb/image_rect_color'), Image, timeout=5.0)
+                    "{}".format("/zedm/zed_node/rgb/image_rect_color"),
+                    Image,
+                    timeout=5.0,
+                )
                 rospy.logdebug(
-                    "Current '{}' READY=>".format('/zedm/zed_node/rgb/image_rect_color'))
+                    "Current '{}' READY=>".format("/zedm/zed_node/rgb/image_rect_color")
+                )
                 self.start_time = rospy.get_time()
                 self.raw_frame = image_msg_to_numpy(self.raw_frame)
 
             except:
                 rospy.logerr(
-                    "Current '{}' not ready yet, retrying for getting image".format('/zedm/zed_node/rgb/image_rect_color'))
-                
+                    "Current '{}' not ready yet, retrying for getting image".format(
+                        "/zedm/zed_node/rgb/image_rect_color"
+                    )
+                )
+
         return self.raw_frame
-    
+
     def _check_depth_camera_ready(self):
 
         self.depth = None
         rospy.logdebug(
-            "Waiting for '{}' to be READY...".format('/zedm/zed_node/depth/depth_registered'))
+            "Waiting for '{}' to be READY...".format(
+                "/zedm/zed_node/depth/depth_registered"
+            )
+        )
         while self.depth is None and not rospy.is_shutdown():
             try:
                 self.depth = rospy.wait_for_message(
-                    '{}'.format('/zedm/zed_node/depth/depth_registered'), Image, timeout=5.0)
+                    "{}".format("/zedm/zed_node/depth/depth_registered"),
+                    Image,
+                    timeout=5.0,
+                )
                 rospy.logdebug(
-                    "Current '{}' READY=>".format('/zedm/zed_node/depth/depth_registered'))
+                    "Current '{}' READY=>".format(
+                        "/zedm/zed_node/depth/depth_registered"
+                    )
+                )
                 self.zed_init = True
                 self.depth = image_msg_to_numpy(self.depth)
             except:
                 rospy.logerr(
                     "Current '{}' not ready yet, retrying for getting image".format(
-                        '/zedm/zed_node/depth/depth_registered'))
+                        "/zedm/zed_node/depth/depth_registered"
+                    )
+                )
         return self.depth
-    
+
     def get_com(self, pcl):
 
-        nbrs = NearestNeighbors(n_neighbors=10, algorithm='ball_tree').fit(pcl)
+        nbrs = NearestNeighbors(n_neighbors=10, algorithm="ball_tree").fit(pcl)
         distances, indices = nbrs.kneighbors(pcl)
         density = np.mean(distances, axis=1)
         weights = 1.0 / density
@@ -88,11 +138,13 @@ class ZedPointCloudSubscriber:
         except Exception as e:
             print(e)
             return
-            
+
     def _depth_subscriber_callback(self, msg):
         try:
             frame = image_msg_to_numpy(msg)
-            self.depth = cv2.resize(frame, (self.w, self.h), interpolation=cv2.INTER_AREA)
+            self.depth = cv2.resize(
+                frame, (self.w, self.h), interpolation=cv2.INTER_AREA
+            )
         except Exception as e:
             print(e)
 
@@ -107,16 +159,16 @@ class ZedPointCloudSubscriber:
             self.last_cloud = proc_cloud
 
         except Exception as e:
-            print(e, 'pcl')
+            print(e, "pcl")
 
         return self.last_cloud
 
     def _check_convert_ready(self):
-        print('Waiting for depth-to-pcl to init')
+        print("Waiting for depth-to-pcl to init")
         while self.last_cloud is None and not rospy.is_shutdown():
             self.init_success &= self.last_cloud is None
             rospy.sleep(0.1)
-        print('depth-to-pcl is ready')
+        print("depth-to-pcl is ready")
 
     def sample_n(self, pts, num_sample):
         num = pts.shape[0]
@@ -153,7 +205,9 @@ class ZedPointCloudSubscriber:
         voxel_size_y = voxel_size
         voxel_size_z = voxel_size
 
-        voxel_grid = np.floor(points / np.array([voxel_size_x, voxel_size_y, voxel_size_z])).astype(int)
+        voxel_grid = np.floor(
+            points / np.array([voxel_size_x, voxel_size_y, voxel_size_z])
+        ).astype(int)
         unique_voxels, indices = np.unique(voxel_grid, axis=0, return_index=True)
         sampled_points = points[indices]
 
@@ -169,17 +223,16 @@ class ZedPointCloudSubscriber:
     def get_last_rgb(self):
 
         return self.raw_frame
-    
+
     def timer_callback(self, event):
-        # Called periodically by the timer
         self.to_pcl(self.depth)
 
 
 if __name__ == "__main__":
-    rospy.init_node('ZedPointCloudPub')
+    rospy.init_node("ZedPointCloudPub")
     pcl = ZedPointCloudSubscriber()
     # pointcloud_pub = PointCloudPublisher()
-    rate = rospy.Rate(30)
+    rate = rospy.Rate(100)
 
     while not rospy.is_shutdown():
         # pcl.to_object_pcl()

@@ -60,12 +60,12 @@ def cluster_fixtures(fixture_points, eps=0.03, min_points=10, display=True):
     if display:
         cluster_pcds = []
         colors = [
-            [1, 0, 0],  # Red
-            [0, 1, 0],  # Green
-            [0, 0, 1],  # Blue
-            [1, 1, 0],  # Yellow
-            [1, 0, 1],  # Magenta
-            [0, 1, 1],  # Cyan
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 1, 0],
+            [1, 0, 1],
+            [0, 1, 1],
         ]
 
         for i, cluster in enumerate(clusters):
@@ -131,7 +131,8 @@ def main():
     brio_to_world_path = project_root / "data" / "brio" / "brio2world.tf"
     brio_to_world = RigidTransform.load(brio_to_world_path)
 
-    brio_intrinsics = BrioConfig.get_intrinsic_matrix()
+    brio_config = BrioConfig()
+    brio_intrinsics = brio_config.get_intrinsic_matrix()
 
     with h5py.File(hdf5_file_path, "r") as hdf:
         brio_rgb = hdf["brio/rgb"][0]

@@ -34,7 +34,7 @@ def depth_to_pointcloud(depth_map, rgb_image, intrinsics, transform, max_depth=1
     points_homogeneous = np.hstack((points, np.ones((points.shape[0], 1))))
     points_world = (transform.matrix @ points_homogeneous.T).T[:, :3]
 
-    rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+    # rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
     rgb_image = rgb_image.astype(np.float32) / 255.0
     rgb_image = rgb_image.reshape(-1, 3)
     colors = rgb_image[valid_flat]

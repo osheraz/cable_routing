@@ -10,6 +10,7 @@ from cable_routing.configs.envconfig import ExperimentConfig
 
 from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
 from sensor_msgs.msg import CameraInfo, Image
+from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
 from cable_routing.env.ext_camera.utils.img_utils import (
     SCALE_FACTOR,
@@ -17,8 +18,8 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     select_target_point,
 )
 
-TABLE_HEIGHT = 0.0  # 0.023
-BOARD_HEIGHT = 0.00  # 0.035
+TABLE_HEIGHT = 0.1  # 0.023
+BOARD_HEIGHT = 0.1  # 0.035
 
 
 def get_world_coord_from_pixel_coord(
@@ -41,40 +42,6 @@ def get_world_coord_from_pixel_coord(
             point_3d_world[-1] = BOARD_HEIGHT
 
     return point_3d_world
-
-
-class ZedCameraSubscriber:
-
-    def __init__(
-        self,
-        topic_depth="/zedm/zed_node/depth/depth_registered",
-        topic_rgb="/zedm/zed_node/rgb/image_rect_color",
-    ):
-        self.depth_image = None
-        self.rgb_image = None
-
-        self.depth_subscriber = rospy.Subscriber(
-            topic_depth, Image, self.depth_callback, queue_size=2
-        )
-        self.rgb_subscriber = rospy.Subscriber(
-            topic_rgb, Image, self.rgb_callback, queue_size=2
-        )
-
-    def depth_callback(self, msg):
-        try:
-            self.depth_image = image_msg_to_numpy(msg)
-        except Exception as e:
-            rospy.logerr(f"Depth callback error: {e}")
-
-    def rgb_callback(self, msg):
-        try:
-            self.rgb_image = image_msg_to_numpy(msg)
-        except Exception as e:
-            rospy.logerr(f"RGB callback error: {e}")
-
-    def get_rgb(self):
-
-        return self.rgb_image
 
 
 def main(args: ExperimentConfig):

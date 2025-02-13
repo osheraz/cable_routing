@@ -4,6 +4,54 @@ import numpy as np
 SCALE_FACTOR = 0.5
 
 
+def green_color_segment(point_cloud, display=True):
+    points = np.asarray(point_cloud.points)
+    colors = np.asarray(point_cloud.colors)
+
+    red = colors[:, 0]
+    green = colors[:, 1]
+    blue = colors[:, 2]
+
+    green_dominance = green - (red + blue) / 2
+    mask = (green_dominance > 0.05) & (green > 0.2)
+
+    fixture_points = points[mask]
+
+    if display:
+        import open3d as o3d
+
+        if fixture_points.shape[0] == 0:
+            print("No green points detected.")
+        else:
+            print(f"Found {len(fixture_points)} green points.")
+
+        segmented_pcd = o3d.geometry.PointCloud()
+        segmented_pcd.points = o3d.utility.Vector3dVector(fixture_points)
+        segmented_pcd.colors = o3d.utility.Vector3dVector(colors[mask])
+        o3d.visualization.draw_geometries([segmented_pcd])
+
+    return fixture_points
+
+
+def rescale_intrinsics(K, scale_factor):
+    K_rescaled = K.copy()
+    K_rescaled[0, 0] *= scale_factor
+    K_rescaled[1, 1] *= scale_factor
+    K_rescaled[0, 2] *= scale_factor
+    K_rescaled[1, 2] *= scale_factor
+    return K_rescaled
+
+
+def mask_image_outside_roi(image, roi):
+    x, y, w, h = roi
+    masked_image = image.copy()
+    masked_image[:y, :] = 255
+    masked_image[y + h :, :] = 255
+    masked_image[:, :x] = 255
+    masked_image[:, x + w :] = 255
+    return masked_image
+
+
 def draw_rectangle(event, x, y, flags, param):
     """
     Allows user to draw a rectangle to define the board region.

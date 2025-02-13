@@ -3,24 +3,44 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.neighbors import NearestNeighbors
-from sensor_msgs.msg import Header, PointCloud2, PointField, CameraInfo
+from sensor_msgs.msg import PointCloud2, PointField, CameraInfo
 import sensor_msgs.point_cloud2 as pc2
+from std_msgs.msg import Header
+
 
 def get_rotation_matrix(roll, pitch, yaw):
     roll, pitch, yaw = torch.tensor(roll), torch.tensor(pitch), torch.tensor(yaw)
     R_x = torch.tensor(
-        [[1, 0, 0], [0, torch.cos(roll), -torch.sin(roll)], [0, torch.sin(roll), torch.cos(roll)]],
-        dtype=torch.float32)
+        [
+            [1, 0, 0],
+            [0, torch.cos(roll), -torch.sin(roll)],
+            [0, torch.sin(roll), torch.cos(roll)],
+        ],
+        dtype=torch.float32,
+    )
     R_y = torch.tensor(
-        [[torch.cos(pitch), 0, torch.sin(pitch)], [0, 1, 0], [-torch.sin(pitch), 0, torch.cos(pitch)]],
-        dtype=torch.float32)
-    R_z = torch.tensor([[torch.cos(yaw), -torch.sin(yaw), 0], [torch.sin(yaw), torch.cos(yaw), 0], [0, 0, 1]],
-                        dtype=torch.float32)
+        [
+            [torch.cos(pitch), 0, torch.sin(pitch)],
+            [0, 1, 0],
+            [-torch.sin(pitch), 0, torch.cos(pitch)],
+        ],
+        dtype=torch.float32,
+    )
+    R_z = torch.tensor(
+        [
+            [torch.cos(yaw), -torch.sin(yaw), 0],
+            [torch.sin(yaw), torch.cos(yaw), 0],
+            [0, 0, 1],
+        ],
+        dtype=torch.float32,
+    )
     return torch.mm(R_z, torch.mm(R_y, R_x))
 
 
 def remove_statistical_outliers(points, k=20, z_thresh=2.0):
-    nbrs = NearestNeighbors(n_neighbors=k + 1).fit(points)  # k+1 because the point itself is included
+    nbrs = NearestNeighbors(n_neighbors=k + 1).fit(
+        points
+    )  # k+1 because the point itself is included
     distances, _ = nbrs.kneighbors(points)
     mean_distances = np.mean(distances[:, 1:], axis=1)
     mean = np.mean(mean_distances)
@@ -31,24 +51,28 @@ def remove_statistical_outliers(points, k=20, z_thresh=2.0):
 
 
 def plot_point_cloud(points):
-    """ Visualize 3D point cloud using Matplotlib """
+    """Visualize 3D point cloud using Matplotlib"""
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
     x = points[::10, 0]
     y = points[::10, 1]
     z = points[::10, 2]
-    ax.scatter(x, y, z, c=z, cmap='viridis', marker='.')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
+    ax.scatter(x, y, z, c=z, cmap="viridis", marker=".")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
     plt.show()
 
 
 class PointCloudGenerator:
-    def __init__(self, 
-                 camera_info_topic='/zedm/zed_node/depth/camera_info',
-                 sample_num=None,  depth_max=None, input_type='depth', device='cpu'):
-
+    def __init__(
+        self,
+        camera_info_topic="/zedm/zed_node/depth/camera_info",
+        sample_num=None,
+        depth_max=None,
+        input_type="depth",
+        device="cpu",
+    ):
 
         if camera_info_topic is not None:
             camera_info = rospy.wait_for_message(camera_info_topic, CameraInfo)
@@ -67,20 +91,23 @@ class PointCloudGenerator:
 
         else:
             # Fallback if no ROS info is available
-            raise ValueError('Camera info not available')
+            raise ValueError("Camera info not available")
 
         # * -1 fu
         self.int_mat = torch.Tensor(
-            [[self.fu, 0, self.cu],
-             [0, self.fv, self.cv],
-             [0, 0, 1]]
+            [[self.fu, 0, self.cu], [0, self.fv, self.cv], [0, 0, 1]]
         )
-        
+
         # TODO get from calib
-        self.ext_mat = torch.tensor([[0.000737, -0.178996, 0.983850, 0.086292],
-                                     [-0.999998, 0.001475, 0.001017, 0.022357],
-                                     [-0.001633, -0.983849, -0.178995, 0.001017],
-                                     [0., 0., 0., 1.]], dtype=torch.float32).to(device)
+        self.ext_mat = torch.tensor(
+            [
+                [0.000737, -0.178996, 0.983850, 0.086292],
+                [-0.999998, 0.001475, 0.001017, 0.022357],
+                [-0.001633, -0.983849, -0.178995, 0.001017],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=torch.float32,
+        ).to(device)
 
         # roll, pitch, yaw = 0.00, 0.0, 0.0
         # rotation_tilt = get_rotation_matrix(roll, pitch, yaw)
@@ -90,8 +117,12 @@ class PointCloudGenerator:
         self.int_mat_T_inv = torch.inverse(self.int_mat.T).to(device)
         self.depth_max = depth_max
 
-        x, y = torch.meshgrid(torch.arange(self.cam_height), torch.arange(self.cam_width))
-        self._uv_one = torch.stack((y, x, torch.ones_like(x)), dim=-1).float().to(device)
+        x, y = torch.meshgrid(
+            torch.arange(self.cam_height), torch.arange(self.cam_width)
+        )
+        self._uv_one = (
+            torch.stack((y, x, torch.ones_like(x)), dim=-1).float().to(device)
+        )
 
         self._uv_one_in_cam = self._uv_one @ self.int_mat_T_inv
 
@@ -105,7 +136,7 @@ class PointCloudGenerator:
         # Process depth buffer
         points = torch.tensor(points, device=self.device, dtype=torch.float32)
 
-        if self.input_type == 'depth':
+        if self.input_type == "depth":
             if self.depth_max is not None:
                 valid_ids = points > self.depth_max
             else:
@@ -131,10 +162,13 @@ class PointCloudGenerator:
 
         # plot_point_cloud(pts_in_cam.cpu().detach().numpy())
 
-        pts_in_cam = torch.cat((pts_in_cam,
-                                torch.ones(*pts_in_cam.shape[:-1], 1,
-                                           device=pts_in_cam.device)),
-                               dim=-1)
+        pts_in_cam = torch.cat(
+            (
+                pts_in_cam,
+                torch.ones(*pts_in_cam.shape[:-1], 1, device=pts_in_cam.device),
+            ),
+            dim=-1,
+        )
 
         pts_in_world = torch.matmul(pts_in_cam, self.ext_mat)
 
@@ -145,8 +179,8 @@ class PointCloudGenerator:
 
 
 class PointCloudPublisher:
-    def __init__(self, topic='pointcloud'):
-        self.pcl_pub = rospy.Publisher(f'/{topic}', PointCloud2, queue_size=10)
+    def __init__(self, topic="pointcloud"):
+        self.pcl_pub = rospy.Publisher(f"/{topic}", PointCloud2, queue_size=10)
 
     def publish_pointcloud(self, points):
         """
@@ -156,13 +190,13 @@ class PointCloudPublisher:
         """
         header = Header()
         header.stamp = rospy.Time.now()
-        header.frame_id = 'base_link'  # Set the frame according to your setup
+        header.frame_id = "base_link"  # Set the frame according to your setup
 
         # Define the PointCloud2 fields (x, y, z)
         fields = [
-            PointField('x', 0, PointField.FLOAT32, 1),
-            PointField('y', 4, PointField.FLOAT32, 1),
-            PointField('z', 8, PointField.FLOAT32, 1)
+            PointField("x", 0, PointField.FLOAT32, 1),
+            PointField("y", 4, PointField.FLOAT32, 1),
+            PointField("z", 8, PointField.FLOAT32, 1),
         ]
 
         # Convert the numpy array to PointCloud2 format

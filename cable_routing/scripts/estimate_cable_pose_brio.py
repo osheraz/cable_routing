@@ -1,6 +1,5 @@
 import open3d as o3d
 import numpy as np
-from scipy.spatial import KDTree
 from sklearn.decomposition import PCA
 from pycpd import RigidRegistration
 import h5py
@@ -9,41 +8,15 @@ from pathlib import Path
 from autolab_core import RigidTransform
 from cable_routing.configs.envconfig import BrioConfig
 from cable_routing.env.ext_camera.utils.pcl_utils import depth_to_pointcloud
+from cable_routing.env.ext_camera.utils.img_utils import (
+    rescale_intrinsics,
+    mask_image_outside_roi,
+    green_color_segment,
+)
 
 
-def rescale_intrinsics(K, scale_factor):
-    K_rescaled = K.copy()
-    K_rescaled[0, 0] *= scale_factor
-    K_rescaled[1, 1] *= scale_factor
-    K_rescaled[0, 2] *= scale_factor
-    K_rescaled[1, 2] *= scale_factor
-    return K_rescaled
+def construct_skeletal_graph(cable_points, num_nodes=1000):
 
-
-def mask_image_outside_roi(image, roi):
-    x, y, w, h = roi
-    masked_image = image.copy()
-    masked_image[:y, :] = 255
-    masked_image[y + h :, :] = 255
-    masked_image[:, :x] = 255
-    masked_image[:, x + w :] = 255
-    return masked_image
-
-
-def color_segment_cable(point_cloud, color_threshold=(0.1, 0.1, 0.1), display=True):
-    points = np.asarray(point_cloud.points)
-    colors = np.asarray(point_cloud.colors)
-    mask = np.linalg.norm(colors - color_threshold, axis=1) < 0.2
-    fixture_points = points[mask]
-    if display:
-        segmented_pcd = o3d.geometry.PointCloud()
-        segmented_pcd.points = o3d.utility.Vector3dVector(fixture_points)
-        segmented_pcd.colors = o3d.utility.Vector3dVector(colors[mask])
-        o3d.visualization.draw_geometries([segmented_pcd])
-    return fixture_points
-
-
-def construct_reeb_graph(cable_points, num_nodes=50):
     pca = PCA(n_components=1)
     pca.fit(cable_points)
     projected = pca.transform(cable_points).flatten()
@@ -62,25 +35,35 @@ def apply_cpd(source_nodes, target_nodes):
 
 def main():
     script_path = Path(__file__).resolve()
+
     project_root = script_path.parent.parent.parent
     hdf5_file_path = (
         project_root / "records" / "new" / "camera_data_20250209_161554_0.h5"
     )
+
     brio_to_world_path = project_root / "data" / "brio" / "brio2world.tf"
     brio_to_world = RigidTransform.load(brio_to_world_path)
 
-    brio_intrinsics = BrioConfig.get_intrinsic_matrix()
+    brio_config = BrioConfig()
+    brio_intrinsics = brio_config.get_intrinsic_matrix()
 
     with h5py.File(hdf5_file_path, "r") as hdf:
         brio_rgb = hdf["brio/rgb"][0]
 
     SCALE_FACTOR = 0.5
+
     brio_rgb = cv2.resize(
         brio_rgb, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
     )
 
-    roi = cv2.selectROI("Select Region", brio_rgb, fromCenter=False, showCrosshair=True)
-    cv2.destroyWindow("Select Region")
+    # roi = cv2.selectROI(
+    #     "Select Region",
+    #     cv2.cvtColor(brio_rgb, cv2.COLOR_RGB2BGR),
+    #     fromCenter=False,
+    #     showCrosshair=True,
+    # )
+    roi = (0, 0, 0, 0)
+    # cv2.destroyWindow("Select Region")
     if roi == (0, 0, 0, 0):
         roi = (0, 0, brio_rgb.shape[1], brio_rgb.shape[0])
     brio_rgb = mask_image_outside_roi(brio_rgb, roi)
@@ -97,8 +80,8 @@ def main():
     pcd.points = o3d.utility.Vector3dVector(points)
     pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    cable_points = color_segment_cable(pcd)
-    cable_nodes = construct_reeb_graph(cable_points)
+    cable_points = green_color_segment(pcd)
+    cable_nodes = construct_skeletal_graph(cable_points)
     # completed_cable_nodes = apply_cpd(cable_nodes, cable_points)
 
     cable_pcd = o3d.geometry.PointCloud()
