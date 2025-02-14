@@ -17,6 +17,7 @@ class YuMiRobotEnv:
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.move_to_home()
+        self.open_grippers()
         self.interface.calibrate_grippers()
         # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")

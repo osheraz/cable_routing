@@ -18,16 +18,19 @@ from cable_routing.env.ext_camera.utils.pcl_utils import (
     overlay_skeleton_on_image,
 )
 
+import os
+
+# os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
 
 def construct_skeletal_graph(cable_points, num_nodes=2000):
-
     pca = PCA(n_components=1)
     pca.fit(cable_points)
     projected = pca.transform(cable_points).flatten()
     sorted_indices = np.argsort(projected)
     cable_points_sorted = cable_points[sorted_indices]
     node_indices = np.linspace(0, len(cable_points_sorted) - 1, num_nodes, dtype=int)
-    cable_nodes = cable_points_sorted[node_indices]
+    cable_nodes = cable_points_sorted[node_indices][:]
 
     return cable_nodes
 
@@ -75,13 +78,14 @@ def main():
         rospy.logerr("No frame received!")
         return
 
-    roi = cv2.selectROI(
-        "Select Region",
-        cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR),
-        fromCenter=False,
-        showCrosshair=True,
-    )
-    cv2.destroyWindow("Select Region")
+    # roi = cv2.selectROI(
+    #     "Select Region",
+    #     cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR),
+    #     fromCenter=False,
+    #     showCrosshair=True,
+    # )
+    # cv2.destroyWindow("Select Region")
+    roi = (0, 0, 0, 0)
     if roi == (0, 0, 0, 0):
         roi = (0, 0, rgb_frame.shape[1], rgb_frame.shape[0])
     rgb_frame = mask_image_outside_roi(rgb_frame, roi)

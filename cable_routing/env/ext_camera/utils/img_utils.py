@@ -34,6 +34,12 @@ def green_color_segment(point_cloud, display=True):
     return fixture_points
 
 
+def sort_cable_points(cable_points, start_point, end_point):
+    """
+    Sorts the given cable points into the correct order to follow the trajectory of the cable from one end to the other
+    """
+
+
 def rescale_intrinsics(K, scale_factor):
     K_rescaled = K.copy()
     K_rescaled[0, 0] *= scale_factor
