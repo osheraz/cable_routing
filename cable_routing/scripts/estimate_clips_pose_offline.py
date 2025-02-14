@@ -86,11 +86,11 @@ def classify_fixture(cluster):
     variances = pca.explained_variance_
     size = np.linalg.norm(cluster.max(axis=0) - cluster.min(axis=0))
     oblongness = variances[0] / variances[1] if variances[1] != 0 else 1.0
-    if size < 0.03:
+    if size < 0.01:
         return "socket-small", directions[0]
     elif size < 0.06:
         return "socket-big", directions[0]
-    elif oblongness > 2:
+    elif oblongness > 1:
         return "clipper", directions[0]
     else:
         return "retainer", directions[0]
@@ -141,8 +141,12 @@ def main():
     brio_rgb = cv2.resize(
         brio_rgb, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
     )
-
-    roi = cv2.selectROI("Select Region", brio_rgb, fromCenter=False, showCrosshair=True)
+    roi = cv2.selectROI(
+        "Select Region",
+        cv2.cvtColor(brio_rgb, cv2.COLOR_BGR2RGB),
+        fromCenter=False,
+        showCrosshair=True,
+    )
     cv2.destroyWindow("Select Region")
     if roi == (0, 0, 0, 0):
         roi = (0, 0, brio_rgb.shape[1], brio_rgb.shape[0])

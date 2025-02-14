@@ -28,8 +28,9 @@ def setup_zed_camera(camera_parameters):
 
     zed.cam.set_camera_settings(sl.VIDEO_SETTINGS.GAIN, camera_parameters.gain)
     zed.cam.set_camera_settings(sl.VIDEO_SETTINGS.EXPOSURE, camera_parameters.exposure)
-    
+
     return zed
+
 
 def get_world_coord_from_pixel_coord(
     pixel_coord, cam_intrinsics, cam_extrinsics, board_rect
@@ -52,6 +53,7 @@ def get_world_coord_from_pixel_coord(
 
     return point_3d_world
 
+
 def main(args: ExperimentConfig):
     """Main function to run the robot-camera interaction loop."""
 
@@ -66,8 +68,8 @@ def main(args: ExperimentConfig):
     calibration_params = (
         zed.cam.get_camera_information().camera_configuration.calibration_parameters
     )
-    width=1280
-    height=720
+    width = 1280
+    height = 720
     f_x, f_y = calibration_params.left_cam.fx, calibration_params.left_cam.fy
     c_x, c_y = calibration_params.left_cam.cx, calibration_params.left_cam.cy
 
@@ -82,7 +84,7 @@ def main(args: ExperimentConfig):
         cy=c_y,
         width=width,
         height=height,
-        frame='zed',
+        frame="zed",
     )
 
     frame, _ = zed.get_rgb_depth()
@@ -105,7 +107,7 @@ def main(args: ExperimentConfig):
     pixel_coord = select_target_point(resized_frame)
     if pixel_coord is None:
         return
-    
+
     world_coord = get_world_coord_from_pixel_coord(
         pixel_coord, CAM_INTR, T_CAM_BASE, board_rect
     )

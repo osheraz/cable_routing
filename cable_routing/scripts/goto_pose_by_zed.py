@@ -73,19 +73,21 @@ def main(args: ExperimentConfig):
     )
 
     frame = zed_cam.get_rgb()
-    resized_frame = cv2.resize(
-        frame, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
-    )
 
-    print("Draw a rectangle for the board area. Press 's' to continue.")
-    board_rect = define_board_region(resized_frame)
-    if board_rect is None:
-        return
+    # Uncomment for board selection
+    # resized_frame = cv2.resize(
+    #     frame, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
+    # )
 
-    board_rect = [
-        (tuple(np.array(corner) / SCALE_FACTOR) for corner in rect)
-        for rect in board_rect
-    ]
+    # print("Draw a rectangle for the board area. Press 's' to continue.")
+    # board_rect = define_board_region(resized_frame)
+    # if board_rect is None:
+    #     return
+
+    # board_rect = [
+    #     (tuple(np.array(corner) / SCALE_FACTOR) for corner in rect)
+    #     for rect in board_rect
+    # ]
 
     print("Select a target point.")
     pixel_coord = select_target_point(frame)
@@ -103,19 +105,23 @@ def main(args: ExperimentConfig):
 
     yumi.dual_hand_grasp(
         world_coord=world_coord,
-        axis="y",
+        axis="x",
         slow_mode=True,
     )
-    # world_coord[2] += 0.1
-    # world_coord[0] += 0.1
-    # yumi.move_dual_hand_insertion(world_coord)
-    # yumi.slide_hand(arm="left", axis="y", amount=0.1)
+
+    world_coord[2] += 0.1
+    world_coord[0] -= 0.1
+    world_coord[1] += 0.1
+    yumi.rotate_dual_hands_around_center(angle=np.pi / 2)
+    yumi.move_dual_hand_insertion(world_coord)
+    # yumi.slide_hand(arm="left", axis="x", amount=0.1)
 
     # world_coord[2] += 0.1
     # world_coord[0] += 0.1
     # yumi.move_dual_hand_to(world_coord, slow_mode=True)
 
     input("Press Enter to return...")
+    yumi.open_grippers()
     yumi.move_to_home()
 
 

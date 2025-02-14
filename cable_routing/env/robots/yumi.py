@@ -16,8 +16,8 @@ class YuMiRobotEnv:
         self.interface = Interface(speed=0.2)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
-        self.move_to_home()
         self.open_grippers()
+        self.move_to_home()
         self.interface.calibrate_grippers()
         # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")
@@ -247,7 +247,7 @@ class YuMiRobotEnv:
         pass
 
     def single_hand_grasp(
-        self, world_coord: np.ndarray, slow_mode: bool = False
+        self, world_coord: np.ndarray, slow_mode: bool = True
     ) -> None:
         """ """
 
@@ -294,7 +294,7 @@ class YuMiRobotEnv:
     def dual_hand_grasp(
         self,
         world_coord: Union[np.ndarray, List[np.ndarray]],
-        spacing: float = 0.18,
+        spacing: float = 0.17,
         axis: Literal["x", "y"] = "y",
         slow_mode: bool = False,
     ) -> None:
@@ -373,12 +373,12 @@ class YuMiRobotEnv:
         )
 
         self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
-        self.interface.yumi.set_speed(original_speed)
+        # self.interface.yumi.set_speed(original_speed)
 
     def move_dual_hand_insertion(
         self,
         target_center: np.ndarray,
-        insertion_depth: float = 0.05,
+        insertion_depth: float = 0.1,
         insertion_axis: Literal["x", "y", "z"] = "z",
         slow_mode: bool = False,
     ) -> None:
@@ -430,6 +430,38 @@ class YuMiRobotEnv:
 
         time.sleep(0.5)  # Wait before closing
         self.interface.close_grippers(side=arm)
+
+    def rotate_dual_hands_around_center(self, angle: float) -> None:
+        left_pose, right_pose = self.get_ee_pose()
+        center_point = (left_pose.translation + right_pose.translation) / 2
+
+        cos_theta = np.cos(angle)
+        sin_theta = np.sin(angle)
+
+        rotation_matrix = np.array(
+            [[cos_theta, -sin_theta, 0], [sin_theta, cos_theta, 0], [0, 0, 1]]
+        )
+
+        new_left_translation = center_point + rotation_matrix @ (
+            left_pose.translation - center_point
+        )
+        new_right_translation = center_point + rotation_matrix @ (
+            right_pose.translation - center_point
+        )
+
+        new_left_rotation = rotation_matrix @ left_pose.rotation
+        new_right_rotation = rotation_matrix @ right_pose.rotation
+
+        target_pose_left = RigidTransform(
+            rotation=new_left_rotation, translation=new_left_translation
+        )
+        target_pose_right = RigidTransform(
+            rotation=new_right_rotation, translation=new_right_translation
+        )
+
+        original_speed = self.interface._async_interface.speed
+        self.interface.yumi.set_speed(original_speed * 0.5)
+        self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
 
 
 def main(args: ExperimentConfig):
