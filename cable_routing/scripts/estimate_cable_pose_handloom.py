@@ -1,4 +1,7 @@
+from tracemalloc import start
+from flask.cli import F
 import rospy
+from sympy import false
 from sensor_msgs.msg import CameraInfo
 import open3d as o3d
 import numpy as np
@@ -8,22 +11,73 @@ from autolab_core import RigidTransform
 from cable_routing.configs.envconfig import ZedMiniConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.handloom.handloom_pipeline.tracer import AnalyticTracer, Tracer
+from cable_routing.env.ext_camera.utils.img_utils import (
+    define_board_region,
+    select_target_point,
+)
 
 
 # os.environ["QT_QPA_PLATFORM"] = "offscreen"
-def convert_to_handloom_input(img):
+# def convert_to_handloom_input(img, invert=False):
 
-    img = cv2.resize(img, (772, 1032))
-    img = np.average(img, axis=2, keepdims=True).astype(np.uint8)
+#     img = cv2.cvtColor(cv2.resize(img, (772, 1032)), cv2.COLOR_RGB2GRAY)
+#     # print(img)
+#     # print(img.shape)
+#     if invert:
+#         img = cv2.bitwise_not(img)
+#     # img = np.average(img, axis=2, keepdims=True).astype(np.uint8)
+#     img = np.stack([img] * 3, axis=-1).squeeze()
+
+#     return img
+
+
+def convert_to_handloom_input(img, invert=False, pad=True):
+    target_size = img.shape[:2]  # (772, 1032)
+
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+    if invert:
+        img = cv2.bitwise_not(img)
+
+    h, w = img.shape
+    aspect_ratio = w / h
+
+    if pad:
+        extra_pad = int(min(h, w) * 0.05)
+        new_h = h + 2 * extra_pad
+        new_w = int(new_h * aspect_ratio)
+        padded_img = 0 * np.ones((new_h, new_w), dtype=np.uint8)
+        y_offset = (new_h - h) // 2
+        x_offset = (new_w - w) // 2
+        padded_img[y_offset : y_offset + h, x_offset : x_offset + w] = img
+        img = padded_img
+
+    img = cv2.resize(img, target_size)
+
     img = np.stack([img] * 3, axis=-1).squeeze()
 
     return img
 
 
+def crop_img(img):
+    point1, point2 = define_board_region(img)[0]
+    x1, x2, y1, y2 = (
+        min(point1[0], point2[0]),
+        max(point1[0], point2[0]),
+        min(point1[1], point2[1]),
+        max(point1[1], point2[1]),
+    )
+
+    return img[y1:y2, x1:x2]
+
+
 def main():
+    print("Starting")
     rospy.init_node("zed_cable_tracking")
+    print("Initialized Camera")
 
     zed_cam = ZedCameraSubscriber()
+    print("Set up Zed Subscriber")
     tracer = Tracer()
     analytic_tracer = AnalyticTracer()
 
@@ -63,30 +117,24 @@ def main():
         rospy.logerr("No frame received!")
         return
 
-    img = convert_to_handloom_input(rgb_frame)
+    # cropping the image
+    img = crop_img(rgb_frame)
+    img = convert_to_handloom_input(img, invert=True)
 
-    coordinates = []
-
-    def click_event(event, x, y, flags, param):
-        global coordinates
-        if event == cv2.EVENT_LBUTTONDOWN:
-            print(f"Clicked at ({x}, {y})")
-            coordinates = [x, y]
-
-    cv2.imshow("zed image", img)
-    cv2.setMouseCallback("zed image", click_event)
-    cv2.waitKey(0)
-
+    coordinates = select_target_point(img)
     start_pixels = np.array(coordinates)[::-1]
     img_cp = img.copy()
 
     print("Starting analytical tracer")
+
     start_pixels, _ = analytic_tracer.trace(
         img, start_pixels, path_len=6, viz=False, idx=100
     )
+    print(start_pixels)
     if len(start_pixels) < 5:
         print("failed analytical trace")
         exit()
+
     print("Starting learned tracer")
 
     # output: path, TraceEnd.FINISHED, heatmaps, crops, covariances, max_sums
@@ -94,6 +142,8 @@ def main():
     path, status, heatmaps, crops, covs, sums = tracer.trace(
         img_cp, start_pixels, path_len=1200, viz=True, idx=100
     )
+
+    print(status)
 
 
 if __name__ == "__main__":

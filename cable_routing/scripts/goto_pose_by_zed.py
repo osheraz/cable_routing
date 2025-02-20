@@ -20,7 +20,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
 
 
 def get_world_coord_from_pixel_coord(
-    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.805
+    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.73
 ):
     pixel_coord = np.array(pixel_coord, dtype=np.float32)
 
@@ -48,8 +48,8 @@ def main(args: ExperimentConfig):
     rospy.init_node("zed_yumi_integration")
 
     yumi = YuMiRobotEnv(args.robot_cfg)
-    # yumi.close_grippers()
-    yumi.open_grippers()
+    yumi.close_grippers()
+    # yumi.open_grippers()
 
     zed_cam = ZedCameraSubscriber()
     rospy.loginfo("Waiting for images from ZED camera...")
@@ -101,19 +101,19 @@ def main(args: ExperimentConfig):
 
     print("World Coordinate: ", world_coord)
 
-    # yumi.single_hand_grasp(world_coord, slow_mode=True)
+    yumi.single_hand_grasp(world_coord, slow_mode=True)
 
-    yumi.dual_hand_grasp(
-        world_coord=world_coord,
-        axis="x",
-        slow_mode=True,
-    )
+    # yumi.dual_hand_grasp(
+    #     world_coord=world_coord,
+    #     axis="x",
+    #     slow_mode=True,
+    # )
 
-    world_coord[2] += 0.1
-    world_coord[0] -= 0.1
-    world_coord[1] += 0.1
-    yumi.rotate_dual_hands_around_center(angle=np.pi / 2)
-    yumi.move_dual_hand_insertion(world_coord)
+    # world_coord[2] += 0.1
+    # world_coord[0] -= 0.1
+    # world_coord[1] += 0.1
+    # yumi.rotate_dual_hands_around_center(angle=np.pi / 2)
+    # yumi.move_dual_hand_insertion(world_coord)
     # yumi.slide_hand(arm="left", axis="x", amount=0.1)
 
     # world_coord[2] += 0.1
