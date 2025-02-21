@@ -4,6 +4,17 @@ import numpy as np
 SCALE_FACTOR = 1.0
 
 
+def crop_img(img):
+    point1, point2 = define_board_region(img)[0]
+    x1, x2, y1, y2 = (
+        min(point1[0], point2[0]),
+        max(point1[0], point2[0]),
+        min(point1[1], point2[1]),
+        max(point1[1], point2[1]),
+    )
+    return img[y1:y2, x1:x2], (x1, y1)
+
+
 def green_color_segment(point_cloud, display=True):
 
     points = np.asarray(point_cloud.points)

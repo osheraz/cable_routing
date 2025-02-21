@@ -4,6 +4,77 @@ import cv2
 from autolab_core import RigidTransform
 
 
+def generate_color_gradient(num_points):
+    colors = np.zeros((num_points, 3))
+    for i in range(num_points):
+        t = i / (num_points - 1) if num_points > 1 else 0
+        colors[i] = [1 - t, 0, t]  # Red (start) → Blue (end)
+    return colors
+
+
+def path_to_3d(path, depth_image, intrinsic, ext_mat):
+    points_3d = []
+
+    fx = intrinsic[0, 0]
+    fy = intrinsic[1, 1]
+    cx = intrinsic[0, 2]
+    cy = intrinsic[1, 2]
+
+    for x, y in path:
+        z = depth_image[y, x]
+
+        point = np.array([(x - cx) * z / fx, (y - cy) * z / fy, z - 0.05])
+
+        points_3d.append(point)
+
+    points_3d = np.array(points_3d)
+
+    if len(points_3d) > 0:
+        points_homo = np.hstack((points_3d, np.ones((points_3d.shape[0], 1))))
+        points_3d = (ext_mat @ points_homo.T).T[:, :3]
+
+    return points_3d
+
+
+def create_pcd_from_rgbd(rgb_image, depth_image, intrinsic_matrix, ext_mat):
+    h, w = depth_image.shape
+    fx, fy = intrinsic_matrix[0, 0], intrinsic_matrix[1, 1]
+    cx, cy = intrinsic_matrix[0, 2], intrinsic_matrix[1, 2]
+
+    x_coords, y_coords = np.meshgrid(np.arange(w), np.arange(h), indexing="xy")
+
+    x_coords = x_coords.flatten()
+    y_coords = y_coords.flatten()
+    z_coords = depth_image.flatten()
+
+    valid_mask = z_coords > 0
+    x_coords, y_coords, z_coords = (
+        x_coords[valid_mask],
+        y_coords[valid_mask],
+        z_coords[valid_mask],
+    )
+
+    x3d = (x_coords - cx) * z_coords / fx
+    y3d = (y_coords - cy) * z_coords / fy
+    points_3d = np.vstack((x3d, y3d, z_coords)).T
+
+    points_homo = np.hstack((points_3d, np.ones((points_3d.shape[0], 1))))
+    points_3d = (ext_mat @ points_homo.T).T[:, :3]
+
+    colors = rgb_image.reshape(-1, 3)[valid_mask] / 255.0
+
+    valid_mask = np.isfinite(points_3d).all(axis=1)
+
+    filtered_points = points_3d[valid_mask]
+    filtered_colors = colors[valid_mask]
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(filtered_points)
+    pcd.colors = o3d.utility.Vector3dVector(filtered_colors)
+
+    return pcd
+
+
 def project_points_to_image(points_3d, intrinsics, extrinsics, image_shape):
     """
     Projects 3D points onto a 2D image.

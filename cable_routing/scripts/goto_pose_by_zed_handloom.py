@@ -1,3 +1,4 @@
+from math import pi
 import rospy
 import numpy as np
 import cv2
@@ -11,12 +12,15 @@ from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
 from sensor_msgs.msg import CameraInfo, Image
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
+from cable_routing.env.ext_camera.utils.img_utils import select_target_point, crop_img
 
 from cable_routing.env.ext_camera.utils.img_utils import (
     SCALE_FACTOR,
     define_board_region,
     select_target_point,
 )
+
+from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
 
 
 def get_world_coord_from_pixel_coord(
@@ -43,12 +47,26 @@ def get_world_coord_from_pixel_coord(
     return point_3d_world
 
 
+def pick_target_on_path(img, path):
+    img_display = img.copy()
+
+    for x, y in path:
+        cv2.circle(img_display, (x, y), 2, (0, 255, 0), -1)
+
+    selected_point = select_target_point(img_display)
+    if selected_point is not None:
+        cv2.destroyAllWindows()
+        return selected_point
+
+
 def main(args: ExperimentConfig):
-    rospy.init_node("zed_yumi_integration")
+
+    rospy.init_node("handloom_integration")
 
     yumi = YuMiRobotEnv(args.robot_cfg)
     yumi.close_grippers()
-    # yumi.open_grippers()
+
+    tracer = CableTracer()
 
     zed_cam = ZedCameraSubscriber()
     rospy.loginfo("Waiting for images from ZED camera...")
@@ -73,29 +91,22 @@ def main(args: ExperimentConfig):
 
     frame = zed_cam.get_rgb()
 
-    # Uncomment for board selection
-    # resized_frame = cv2.resize(
-    #     frame, None, fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_AREA
-    # )
-
-    # print("Draw a rectangle for the board area. Press 's' to continue.")
-    # board_rect = define_board_region(resized_frame)
-    # if board_rect is None:
-    #     return
-
-    # board_rect = [
-    #     (tuple(np.array(corner) / SCALE_FACTOR) for corner in rect)
-    #     for rect in board_rect
-    # ]
+    img, (crop_x, crop_y) = crop_img(frame)
 
     print("Select a target point.")
-    pixel_coord = select_target_point(frame)
-    print("Pixel Coord:", pixel_coord)
-    if pixel_coord is None:
-        return
+    pixel_coord = select_target_point(img)
+
+    path, status = tracer.trace(img=img, endpoints=pixel_coord)
+    print(status)
+
+    original_path = [(x + crop_x, y + crop_y) for x, y in path]
+
+    cv2.destroyAllWindows()
+
+    move_to_pixel = pick_target_on_path(frame, original_path)
 
     world_coord = get_world_coord_from_pixel_coord(
-        pixel_coord, CAM_INTR, T_CAM_BASE  # , board_rect
+        move_to_pixel, CAM_INTR, T_CAM_BASE  # , board_rect
     )
 
     print("World Coordinate: ", world_coord)
