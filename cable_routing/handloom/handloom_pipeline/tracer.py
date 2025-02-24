@@ -17,6 +17,7 @@ from scipy.stats import multivariate_normal
 from cable_routing.handloom.model_training.src.model import KeypointsGauss
 from cable_routing.handloom.model_training.config import *
 from cable_routing.handloom.analytic_tracer import simple_uncertain_trace_single
+import time
 
 # import pyzed.sl as sl
 
@@ -378,6 +379,8 @@ class Tracer:
         disp_img = (image.copy() * 255.0).astype(np.uint8)
 
         heatmaps, crops, covariances = [], [], []
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = None
 
         for iter in range(exact_path_len):
 
@@ -426,6 +429,56 @@ class Tracer:
             ##########################################################
             ##########################################################
 
+            # kavish changes
+            if viz:
+                scaling_factor = 5
+                input_np = np.transpose(
+                    model_input.detach().cpu().numpy().squeeze(), (2, 1, 0)
+                )
+                new_shape = (
+                    input_np.shape[0] * scaling_factor,
+                    input_np.shape[1] * scaling_factor,
+                )
+                input_np = cv2.resize(
+                    input_np,
+                    new_shape,
+                )
+
+                output_np = np.stack([cv2.resize(model_output, new_shape)] * 3, axis=-1)
+
+                img_height = input_np.shape[0]
+                img_width = input_np.shape[1]
+                canvas_height = img_height + 50
+                canvas_width = input_np.shape[0] + output_np.shape[0] + 150
+                canvas = np.zeros((canvas_height, canvas_width, 3))
+                canvas[25 : img_height + 25, 25 : img_width + 25] = input_np
+                canvas[
+                    25 : img_height + 25, img_width + 50 : img_width + 50 + img_width
+                ] = output_np
+
+                max_probability = np.max(model_output)
+
+                canvas = cv2.putText(
+                    canvas,
+                    str(max_probability),
+                    (canvas_width - 100, canvas_height - 25),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=1,
+                    color=(255, 255, 255),
+                    thickness=4,
+                )
+                if out is None:
+                    out = cv2.VideoWriter(
+                        f"./cable_routing/data/handloom_data/{str(time.time())}.mp4",
+                        fourcc,
+                        fps=20.0,
+                        frameSize=(canvas.shape[1], canvas.shape[0]),
+                    )
+                out.write(canvas.astype(np.uint8))
+                cv2.imshow("canvas", canvas)
+
+            # need to plot both the model input and output heatmap and also display the max confidence score in the heatmap
+
             # Osher changes
             model_output_flat = model_output.flatten()
             n_model_output = model_output_flat / np.linalg.norm(
@@ -468,9 +521,6 @@ class Tracer:
             covariances.append(cov_det)
 
             heatmaps.append(model_output)  # model predictions
-
-            ##########################################################
-            ##########################################################
 
             if sample:
                 top_k_probabilities = np.sort(n_model_output)[::-1][:k]
@@ -549,6 +599,7 @@ class Tracer:
                             max_sums,
                         )
 
+        out.release()
         max_sums = find_crossings(image, path)
         return path, TraceEnd.FINISHED, heatmaps, crops, covariances, max_sums
 

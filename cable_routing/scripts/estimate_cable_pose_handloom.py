@@ -55,7 +55,6 @@ def main():
 
     print("Processing single frame...")
     img, (crop_x, crop_y) = crop_img(rgb_frame)
-
     coordinates = select_target_point(img)
 
     path, status = tracer.trace(img=img, endpoints=coordinates)

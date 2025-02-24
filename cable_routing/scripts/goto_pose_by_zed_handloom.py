@@ -24,7 +24,7 @@ from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
 
 
 def get_world_coord_from_pixel_coord(
-    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.73
+    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.8
 ):
     pixel_coord = np.array(pixel_coord, dtype=np.float32)
 
