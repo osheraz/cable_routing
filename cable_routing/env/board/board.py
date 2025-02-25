@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     img = cv2.imread("/home/osheraz/cable_routing/data/board_setup.png")
 
-    cable_path = [(100, 200), (150, 250), (200, 300), (200, 300)]]
+    cable_path = [(100, 200), (150, 250), (200, 300), (200, 300)]
     board.set_cable_path(cable_path)
 
     annotated_img = board.visualize_board(img)

@@ -16,31 +16,8 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     SCALE_FACTOR,
     define_board_region,
     select_target_point,
+    get_world_coord_from_pixel_coord,
 )
-
-
-def get_world_coord_from_pixel_coord(
-    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.73
-):
-    pixel_coord = np.array(pixel_coord, dtype=np.float32)
-
-    if image_shape and (
-        cam_intrinsics.width != image_shape[1]
-        or cam_intrinsics.height != image_shape[0]
-    ):
-        scale_x = cam_intrinsics.width / image_shape[1]
-        scale_y = cam_intrinsics.height / image_shape[0]
-        pixel_coord[0] *= scale_x
-        pixel_coord[1] *= scale_y
-
-    pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
-    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * table_depth
-
-    point_3d_world = (
-        cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
-    )
-
-    return point_3d_world
 
 
 def main(args: ExperimentConfig):
