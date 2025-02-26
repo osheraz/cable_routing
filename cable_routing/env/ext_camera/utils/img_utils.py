@@ -5,6 +5,12 @@ import numpy as np
 SCALE_FACTOR = 1.0
 
 
+def find_nearest_point(path, coordinate):
+    path_array = np.array(path)
+    idx = np.argmin(np.sum((path_array - coordinate) ** 2, axis=1))
+    return path[idx], idx
+
+
 def pick_target_on_path(img, path):
     img_display = img.copy()
 

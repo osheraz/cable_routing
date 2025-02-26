@@ -15,7 +15,8 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     select_target_point,
     get_world_coord_from_pixel_coord,
     pick_target_on_path,
-)
+    find_nearest_point,
+)  # Split to env_utils, img_utils etc..
 
 
 class ExperimentEnv:
@@ -92,18 +93,30 @@ class ExperimentEnv:
 
         self.board.set_cable_path(path)
 
-    def goto_cable_node(self, path, pixel_coord=None):
+    def convert_path_to_world_coord(self, path):
+
+        world_path = []
+        for pixel_coord in path:
+            world_coord = get_world_coord_from_pixel_coord(
+                pixel_coord, self.zed_cam.camera_info, self.T_CAM_BASE
+            )
+            world_path.append(world_coord)
+
+        return world_path
+
+    def goto_cable_node(self, path):
 
         frame = self.zed_cam.get_rgb()
 
-        if pixel_coord == None:
-            pixel_coord = select_target_point(frame)
-
         move_to_pixel = pick_target_on_path(frame, path)
+
+        move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
 
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel, self.zed_cam.camera_info, self.T_CAM_BASE
         )
+
+        path_in_world = self.convert_path_to_world_coord(path)
 
         # TODO:find nearest grasp point on the cable
         # TODO:include orientation
