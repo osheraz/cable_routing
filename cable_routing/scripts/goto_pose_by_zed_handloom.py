@@ -1,23 +1,13 @@
 from math import pi
 import rospy
 import numpy as np
-import cv2
-from autolab_core import RigidTransform, Point
-from tqdm import tqdm
-from cable_routing.env.robots.yumi import YuMiRobotEnv
 import tyro
-from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
-from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.env.env import ExperimentEnv
 from cable_routing.env.ext_camera.utils.img_utils import (
-    SCALE_FACTOR,
-    define_board_region,
     get_world_coord_from_pixel_coord,
     pick_target_on_path,
 )
-
-from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
 
 
 def main(args: ExperimentConfig):
@@ -25,53 +15,20 @@ def main(args: ExperimentConfig):
     rospy.init_node("handloom_integration")
     env = ExperimentEnv(args)
 
+    # same stuff, 2 lines
+    # path = env.update_cable_path()
+    # env.goto_cable_node(path)
+
     yumi = env.robot
     yumi.close_grippers()
 
-    # tracer = CableTracer()
-
-    # zed_cam = ZedCameraSubscriber()
-    # rospy.loginfo("Waiting for images from ZED camera...")
-    # while zed_cam.rgb_image is None or zed_cam.depth_image is None:
-    #     rospy.sleep(0.1)
-
-    # T_CAM_BASE = RigidTransform.load(
-    #     "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
-    # ).as_frames(from_frame="zed", to_frame="base_link")
-
-    # camera_info = rospy.wait_for_message("/zedm/zed_node/rgb/camera_info", CameraInfo)
-
-    # CAM_INTR = CameraIntrinsics(
-    #     fx=camera_info.K[0],
-    #     fy=camera_info.K[4],
-    #     cx=camera_info.K[2],
-    #     cy=camera_info.K[5],
-    #     width=camera_info.width,
-    #     height=camera_info.height,
-    #     frame="zed",
-    # )
-
-    # CAM_INTR = zed_cam.intrinsic
-
     frame = env.zed_cam.get_rgb()
-
-    # todo: STORE PARAMS, stop cropping.
-    # img, (crop_x, crop_y) = crop_img(frame)
-
-    # pixel_coord = select_target_point(img)
-
-    # path, status = tracer.trace(img=img, endpoints=pixel_coord)
-    # print(status)
-
-    # original_path = [(x + crop_x, y + crop_y) for x, y in path]
-
-    # cv2.destroyAllWindows()
 
     path, _ = env.trace_cable(frame)
     move_to_pixel = pick_target_on_path(frame, path)
 
     world_coord = get_world_coord_from_pixel_coord(
-        move_to_pixel, env.zed_cam.intrinsic, env.T_CAM_BASE  # , board_rect
+        move_to_pixel, env.zed_cam.intrinsic, env.T_CAM_BASE
     )
 
     print("World Coordinate: ", world_coord)

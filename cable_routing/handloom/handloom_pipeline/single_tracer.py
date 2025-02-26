@@ -14,10 +14,10 @@ class CableTracer:
             img = cv2.bitwise_not(img)
         return np.stack([img] * 3, axis=-1).squeeze()
 
-    def trace(self, img, endpoints):
+    def trace(self, img, start_points, end_points=None):
         img = self.convert_to_handloom_input(img, invert=False)
 
-        start_pixels = np.array(endpoints)[::-1]  # Convert to (y, x) format
+        start_pixels = np.array(start_points)[::-1]  # Convert to (y, x) format
         img_cp = img.copy()
 
         start_pixels, _ = self.analytic_tracer.trace(

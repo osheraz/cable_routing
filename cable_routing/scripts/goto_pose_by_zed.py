@@ -2,7 +2,6 @@ import rospy
 import numpy as np
 import cv2
 from autolab_core import RigidTransform, Point
-from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 import tyro
 from autolab_core import RigidTransform, Point, CameraIntrinsics
@@ -77,7 +76,7 @@ def main(args: ExperimentConfig):
 
     print("World Coordinate: ", world_coord)
 
-    yumi.single_hand_grasp(world_coord, slow_mode=True)
+    yumi.single_hand_grasp(world_coord, eef_rot=np.pi / 2, slow_mode=True)
 
     # yumi.dual_hand_grasp(
     #     world_coord=world_coord,

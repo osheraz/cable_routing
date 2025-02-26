@@ -4,6 +4,8 @@ import cv2
 from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 import tyro
+import matplotlib.pyplot as plt
+import numpy as np
 from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
@@ -16,6 +18,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     get_world_coord_from_pixel_coord,
     pick_target_on_path,
     find_nearest_point,
+    get_perpendicular_ori,
 )  # Split to env_utils, img_utils etc..
 
 
@@ -43,20 +46,24 @@ class ExperimentEnv:
         ).as_frames(from_frame="zed", to_frame="base_link")
 
         self.tracer = CableTracer()
-        self.set_board_region()  # TODO: find a better way..
+
+        ######################################################
+        # self.set_board_region()  # TODO: find a better way..
         # TODO: add support for this in cfg
         # TODO: modify to Jaimyn code
         self.board = Board(
             config_path="/home/osheraz/cable_routing/data/board_config.json"
         )
-
         rospy.logwarn("Env is ready")
 
     def set_board_region(self, img=None):
 
-        if img == None:
+        if img is None:
             img = self.zed_cam.rgb_image
-        _, (self.point1, self.point2) = crop_board(img)
+
+        _, self.point1, self.point2 = crop_board(img)
+
+        print(self.point1, self.point2)
 
     def check_calibration(self):
         """we are going to poke all the clips/plugs etc"""
@@ -76,7 +83,7 @@ class ExperimentEnv:
                 clip_ori = clip["orientation"]
                 pixel_coord = (clip["x"], clip["y"])
                 world_coord = get_world_coord_from_pixel_coord(
-                    pixel_coord, self.zed_cam.camera_info, self.T_CAM_BASE
+                    pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE
                 )
 
                 print(
@@ -84,69 +91,113 @@ class ExperimentEnv:
                 )
 
                 # TODO add support for ori
-                self.robot.single_hand_grasp(world_coord, slow_mode=True)
-                abort = input("Abort? (y/n): ") == "y"
+                self.robot.single_hand_grasp(
+                    world_coord, eef_rot=np.deg2rad(clip_ori), slow_mode=True
+                )
+                self.robot.move_to_home()
 
-    def update_cable_path(self, end_point=None):
+                # abort = input("Abort? (y/n): ") == "y"
 
-        path, _ = self.trace_cable(end_point=end_point)
+    def update_cable_path(self, start_points=None):
+
+        path, _ = self.trace_cable(start_points=start_points)
 
         self.board.set_cable_path(path)
+
+        return path
 
     def convert_path_to_world_coord(self, path):
 
         world_path = []
         for pixel_coord in path:
             world_coord = get_world_coord_from_pixel_coord(
-                pixel_coord, self.zed_cam.camera_info, self.T_CAM_BASE
+                pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE
             )
             world_path.append(world_coord)
 
         return world_path
 
-    def goto_cable_node(self, path):
+    def goto_cable_node(self, path, display=True):
 
         frame = self.zed_cam.get_rgb()
 
         move_to_pixel = pick_target_on_path(frame, path)
-
         move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
 
         world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel, self.zed_cam.camera_info, self.T_CAM_BASE
+            move_to_pixel, self.zed_cam.intrinsic, self.T_CAM_BASE
         )
 
         path_in_world = self.convert_path_to_world_coord(path)
 
-        # TODO:find nearest grasp point on the cable
-        # TODO:include orientation
-        # TODO:check collision
+        cable_ori = get_perpendicular_ori(
+            path_in_world[idx - 1], path_in_world[idx + 1]
+        )
 
-        path = self.board.get_cable_path()
+        path_arr = np.array(path_in_world)
 
-        self.robot.single_hand_grasp(world_coord, slow_mode=True)
+        if display:
+
+            plt.figure()
+            plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-", label="Cable Path")
+
+            plt.plot(
+                world_coord[0],
+                world_coord[1],
+                "rx",
+                markersize=10,
+                label="Grasp Target",
+            )
+
+            b = np.array(path_in_world[idx - 1])[:2]
+            a = np.array(path_in_world[idx + 1])[:2]
+            mid = (b + a) / 2
+            ori_vec = np.array([np.cos(cable_ori), np.sin(cable_ori)])
+
+            plt.quiver(
+                mid[0],
+                mid[1],
+                ori_vec[0],
+                ori_vec[1],
+                angles="xy",
+                scale_units="xy",
+                scale=0.1,
+                color="r",
+                label="Grasp Orientation",
+            )
+
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title("Cable Path and Grasp Orientation")
+            plt.legend()
+            plt.axis("equal")
+            plt.grid(True)
+            plt.show()
+
+        self.robot.single_hand_grasp(world_coord, eef_rot=cable_ori, slow_mode=True)
 
     def get_extrinsic(self):
 
         return self.T_CAM_BASE
 
-    def trace_cable(self, img=None, end_point=None):
+    def trace_cable(self, img=None, start_points=None):
 
-        if img == None:
+        p1, p2 = self.board.point1, self.board.point2
+        if img is None:
             img = self.zed_cam.rgb_image
 
         # TODO: find a better way to set the board region, Handloom related
-        img = crop_img(img, self.point1, self.point2)
+        img = crop_img(img, p1, p2)
 
-        if end_point == None:
-            end_point = select_target_point(img)
+        if start_points == None:
+            start_points = select_target_point(img)
 
-        path, status = self.tracer.trace(img=img, endpoints=end_point)
+        path, status = self.tracer.trace(img=img, start_points=start_points)
         cv2.destroyAllWindows()
 
         print("Tracing status:", status)
 
-        path = [(x + self.point1[0], y + self.point2[0]) for x, y in path]
+        path = [(x + p1[0], y + p1[1]) for x, y in path]
 
         return path, status
 

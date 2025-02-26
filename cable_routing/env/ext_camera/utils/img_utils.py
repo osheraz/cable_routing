@@ -5,6 +5,13 @@ import numpy as np
 SCALE_FACTOR = 1.0
 
 
+def get_perpendicular_ori(b, a):
+    b, a = np.array(b)[:2], np.array(a)[:2]
+    tangent = a - b
+    yaw = np.arctan2(tangent[1], tangent[0])
+    return (yaw + np.pi / 2) % (2 * np.pi)
+
+
 def find_nearest_point(path, coordinate):
     path_array = np.array(path)
     idx = np.argmin(np.sum((path_array - coordinate) ** 2, axis=1))

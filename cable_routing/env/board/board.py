@@ -11,6 +11,7 @@ class Board:
         self.clip_positions = self.load_board_config()
         self.cable_positions = []
         self.clip_types = {1: "6Pin", 2: "2Pin", 3: "Clip", 4: "Retainer"}
+        self.point1, self.point2 = (582, 5), (1391, 767)
 
     def load_board_config(self):
         if os.path.exists(self.config_path):
@@ -35,7 +36,10 @@ class Board:
                 p1 = tuple(self.cable_positions[i])
                 p2 = tuple(self.cable_positions[i + 1])
                 cv2.line(img_display, p1, p2, (0, 255, 255), 2)
-        return img_display
+
+        cv2.imshow("Board Setup with Clips & Cable", img_display)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     def draw_clip(self, img, x, y, clip_type, orientation):
         center = (x, y)
@@ -87,6 +91,3 @@ if __name__ == "__main__":
     board.set_cable_path(cable_path)
 
     annotated_img = board.visualize_board(img)
-    cv2.imshow("Board Setup with Clips & Cable", annotated_img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()

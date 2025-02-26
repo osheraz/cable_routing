@@ -12,14 +12,11 @@ import colorsys
 import shutil
 from enum import Enum
 from scipy.stats import multivariate_normal
-
-# sys.path.insert(0, "..")
 from cable_routing.handloom.model_training.src.model import KeypointsGauss
 from cable_routing.handloom.model_training.config import *
 from cable_routing.handloom.analytic_tracer import simple_uncertain_trace_single
 import time
 
-# import pyzed.sl as sl
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -371,7 +368,6 @@ class Tracer:
         model=None,
         sample=False,
     ):
-        viz = True
         num_condition_points = self.trace_config.condition_len
         if start_points is None or len(start_points) < num_condition_points:
             raise ValueError(f"Need at least {num_condition_points} start points")
@@ -379,7 +375,6 @@ class Tracer:
         disp_img = (image.copy() * 255.0).astype(np.uint8)
 
         heatmaps, crops, covariances = [], [], []
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         out = None
 
         for iter in range(exact_path_len):
@@ -426,11 +421,8 @@ class Tracer:
                 model_output, M, (model_output.shape[1], model_output.shape[0])
             )
 
-            ##########################################################
-            ##########################################################
-
-            # kavish changes
             if viz:
+
                 scaling_factor = 5
                 input_np = np.transpose(
                     model_input.detach().cpu().numpy().squeeze(), (2, 1, 0)
@@ -467,19 +459,11 @@ class Tracer:
                     color=(255, 255, 255),
                     thickness=4,
                 )
-                if out is None:
-                    out = cv2.VideoWriter(
-                        f"./cable_routing/data/handloom_data/{str(time.time())}.mp4",
-                        fourcc,
-                        fps=20.0,
-                        frameSize=(canvas.shape[1], canvas.shape[0]),
-                    )
-                out.write(canvas.astype(np.uint8))
+
                 cv2.imshow("canvas", canvas)
 
             # need to plot both the model input and output heatmap and also display the max confidence score in the heatmap
 
-            # Osher changes
             model_output_flat = model_output.flatten()
             n_model_output = model_output_flat / np.linalg.norm(
                 model_output_flat, ord=1
@@ -580,7 +564,7 @@ class Tracer:
 
             if viz:
                 cv2.imshow("disp_img", disp_img)
-                cv2.waitKey(50)
+                cv2.waitKey(1)
                 # plt.imsave(f"trace_test/disp_img_{iter}.png", disp_img)
 
             if len(path) > 10:
@@ -601,6 +585,7 @@ class Tracer:
 
         out.release()
         max_sums = find_crossings(image, path)
+
         return path, TraceEnd.FINISHED, heatmaps, crops, covariances, max_sums
 
     def trace(self, img, prev_pixels, endpoints=None, path_len=20, viz=False, idx=0):

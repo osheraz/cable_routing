@@ -1,3 +1,4 @@
+from tkinter import LEFT, RIGHT
 from typing import Literal, Optional, Tuple, Union
 import pathlib
 import tyro
@@ -23,6 +24,25 @@ class EnvConfig:
 @dataclasses.dataclass(frozen=True)
 class YuMiConfig:
     YUMI_MIN_POS: Tuple[float, ...] = (-2.94, -2.00, -2.94, -2.16, -5.06, -1.54, -4.00)
+    LEFT_HOME_POS: Tuple[float, ...] = (
+        -0.9512928592851002,
+        -0.826257179789771,
+        1.1051303596535273,
+        0.3525379799595703,
+        1.1488412220991615,
+        0.7785103632911491,
+        0.9975875206203292,
+    )
+
+    RIGHT_HOME_POS: Tuple[float, ...] = (
+        0.814048250667439,
+        -0.9499458324057382,
+        -1.162067545336931,
+        0.3735491891168322,
+        -1.3118667613864166,
+        0.7759426099471219,
+        -1.5252212515862071,
+    )
 
 
 @dataclasses.dataclass(frozen=True)
