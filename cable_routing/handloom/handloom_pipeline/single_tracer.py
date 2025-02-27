@@ -14,24 +14,35 @@ class CableTracer:
             img = cv2.bitwise_not(img)
         return np.stack([img] * 3, axis=-1).squeeze()
 
-    def trace(self, img, start_points, end_points=None):
+    def trace(self, img, start_points, end_points=None, clips=None):
+
         img = self.convert_to_handloom_input(img, invert=False)
 
-        start_pixels = np.array(start_points)[::-1]  # Convert to (y, x) format
+        start_pixels = np.array(start_points)[::-1]  # TODO: To y-x
+
+        end_points = [np.array(end_points)[::-1]]
+
         img_cp = img.copy()
 
         start_pixels, _ = self.analytic_tracer.trace(
-            img, start_pixels, path_len=3, viz=False, idx=100
+            img, start_pixels, endpoints=end_points, path_len=3, viz=False, idx=100
         )
 
         if len(start_pixels) < 3:
-            print("failed analytical trace")
-            return None  # Failed analytical trace
+            print("Failed analytical trace")
+            return None
 
         path, status, _, _, _, _ = self.tracer.trace(
-            img_cp, start_pixels, path_len=1200, viz=True, idx=100
+            img_cp,
+            start_pixels,
+            endpoints=end_points,
+            path_len=200,
+            clips=clips,
+            viz=True,
+            idx=100,
         )
 
         path = np.flip(path, axis=1)
+        cv2.destroyAllWindows()
 
         return path, status

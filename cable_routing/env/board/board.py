@@ -26,11 +26,13 @@ class Board:
         self.cable_positions = cable_positions
 
     def visualize_board(self, img):
+
         img_display = img.copy()
         for clip in self.clip_positions:
             self.draw_clip(
                 img_display, clip["x"], clip["y"], clip["type"], clip["orientation"]
             )
+
         if self.cable_positions:
             for i in range(len(self.cable_positions) - 1):
                 p1 = tuple(self.cable_positions[i])

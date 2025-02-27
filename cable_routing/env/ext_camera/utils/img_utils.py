@@ -8,8 +8,10 @@ SCALE_FACTOR = 1.0
 def get_perpendicular_ori(b, a):
     b, a = np.array(b)[:2], np.array(a)[:2]
     tangent = a - b
-    yaw = np.arctan2(tangent[1], tangent[0])
-    return (yaw + np.pi / 2) % (2 * np.pi)
+    tangent /= np.linalg.norm(tangent)
+
+    perp_vec = np.array([-tangent[1], tangent[0]])
+    return np.arctan2(perp_vec[1], perp_vec[0])
 
 
 def find_nearest_point(path, coordinate):
@@ -187,15 +189,14 @@ def define_board_region(image):
     return board_rect
 
 
-def select_target_point(image):
+def select_target_point(image, rule="start"):
     """
     Displays the image and allows user to select a target point.
     """
-    print("Select a target point.")
 
     params = {"u": None, "v": None}
-    cv2.imshow("Select Target Point", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-    cv2.setMouseCallback("Select Target Point", click_event, param=params)
+    cv2.imshow(f"Select {rule} Point", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    cv2.setMouseCallback(f"Select {rule} Point", click_event, param=params)
 
     while params["u"] is None or params["v"] is None:
         if cv2.waitKey(1) & 0xFF == 27:

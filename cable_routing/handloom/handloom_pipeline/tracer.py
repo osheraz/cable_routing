@@ -364,18 +364,23 @@ class Tracer:
         start_points,
         exact_path_len,
         endpoints=None,
+        clips=None,
         viz=False,
         model=None,
         sample=False,
     ):
+
+        # TODO: Refactor this mess
+
         num_condition_points = self.trace_config.condition_len
+
         if start_points is None or len(start_points) < num_condition_points:
             raise ValueError(f"Need at least {num_condition_points} start points")
+
         path = [start_point for start_point in start_points]
         disp_img = (image.copy() * 255.0).astype(np.uint8)
 
         heatmaps, crops, covariances = [], [], []
-        out = None
 
         for iter in range(exact_path_len):
 
@@ -385,6 +390,7 @@ class Tracer:
                 image, condition_pixels, center_around_last=True
             )
             crops.append(crop)
+
             ymin, xmin = np.array(top_left) - self.trace_config.crop_width
 
             model_input, _, cable_mask, angle = self.get_trp_model_input(
@@ -395,22 +401,13 @@ class Tracer:
                 (cable_mask).astype(np.uint8), np.ones((2, 2)), iterations=1
             )
 
-            if viz:
-                cv2.imshow(
-                    "model input", model_input.detach().cpu().numpy().transpose(1, 2, 0)
-                )
-                # cv2.waitKey(1)
-                # plt.imsave(
-                #     f"trace_test/model_input_{iter}.png",
-                #     model_input.detach().cpu().numpy().transpose(1, 2, 0),
-                # )
-
             model_output = (
                 model(model_input.unsqueeze(0)).detach().cpu().numpy().squeeze()
             )
             model_output *= crop_eroded.squeeze()
             model_output = cv2.resize(model_output, (crop.shape[1], crop.shape[0]))
 
+            model_output_before = model_output.copy()
             # undo rotation if done in preprocessing
             M = cv2.getRotationMatrix2D(
                 (model_output.shape[1] / 2, model_output.shape[0] / 2),
@@ -421,65 +418,23 @@ class Tracer:
                 model_output, M, (model_output.shape[1], model_output.shape[0])
             )
 
-            if viz:
-
-                scaling_factor = 5
-                input_np = np.transpose(
-                    model_input.detach().cpu().numpy().squeeze(), (2, 1, 0)
-                )
-                new_shape = (
-                    input_np.shape[0] * scaling_factor,
-                    input_np.shape[1] * scaling_factor,
-                )
-                input_np = cv2.resize(
-                    input_np,
-                    new_shape,
-                )
-
-                output_np = np.stack([cv2.resize(model_output, new_shape)] * 3, axis=-1)
-
-                img_height = input_np.shape[0]
-                img_width = input_np.shape[1]
-                canvas_height = img_height + 50
-                canvas_width = input_np.shape[0] + output_np.shape[0] + 150
-                canvas = np.zeros((canvas_height, canvas_width, 3))
-                canvas[25 : img_height + 25, 25 : img_width + 25] = input_np
-                canvas[
-                    25 : img_height + 25, img_width + 50 : img_width + 50 + img_width
-                ] = output_np
-
-                max_probability = np.max(model_output)
-
-                canvas = cv2.putText(
-                    canvas,
-                    str(max_probability),
-                    (canvas_width - 100, canvas_height - 25),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    fontScale=1,
-                    color=(255, 255, 255),
-                    thickness=4,
-                )
-
-                cv2.imshow("canvas", canvas)
-
-            # need to plot both the model input and output heatmap and also display the max confidence score in the heatmap
-
             model_output_flat = model_output.flatten()
             n_model_output = model_output_flat / np.linalg.norm(
                 model_output_flat, ord=1
             )
+
             k = 5
             top_k_points = np.argsort(n_model_output)[::-1][:k]
-            # Subtract minimum
-            min_val = np.min(model_output)
+
+            min_val = np.min(model_output)  # Subtract minimum
+
             data = model_output - min_val
 
-            # Normalize to sum to 1
-            sum_val = np.sum(data)
+            sum_val = np.sum(data)  # Normalize to sum to 1
+
             p = data / sum_val
 
-            # Calculate the mean
-            m, n = p.shape
+            m, n = p.shape  # Calculate the mean
             mean = np.array(
                 [np.sum(np.array([i, j]) * p[i, j]) for i in range(m) for j in range(n)]
             ).sum(axis=0) / (m * n)
@@ -492,12 +447,12 @@ class Tracer:
                         * p[i, j]
                     )
 
-            # Function to return Gaussian value
-            def f(i, j):
+            def f(i, j):  # Function to return Gaussian value
+
                 return multivariate_normal.pdf([i, j], mean=mean, cov=cov)
 
-            # Rescale and shift back
-            def g(i, j):
+            def g(i, j):  # Rescale and shift back
+
                 return f(i, j) * sum_val + min_val
 
             cov_det = np.linalg.det(cov)
@@ -523,22 +478,27 @@ class Tracer:
             global_yx = np.array([argmax_yx[0] + ymin, argmax_yx[1] + xmin]).astype(int)
             path.append(global_yx)
 
+            # Stoping case 1 : reached edge
             if (
                 global_yx[0] > (image.shape[0] - self.y_buffer)
                 or global_yx[0] < self.y_buffer
                 or global_yx[1] > (image.shape[1] - self.x_buffer)
                 or global_yx[1] < self.x_buffer
-            ):  # Uncomment for triton
+            ):
                 max_sums = find_crossings(image, path)
                 return path, TraceEnd.EDGE, heatmaps, crops, covariances, max_sums
 
+            # Stoping case 2 : reached endpoint
             if endpoints is not None:
                 for endpoint in endpoints:
+
                     pix_dist = self.get_dist_cumsum(np.array(path))
+
                     if (abs(global_yx[0] - endpoint[0])) < self.ep_buffer and (
                         abs(global_yx[1] - endpoint[1])
                     ) < self.ep_buffer:
-                        if pix_dist > 2.5:
+
+                        if pix_dist > 0.3:  # minimal length
                             max_sums = find_crossings(image, path)
                             return (
                                 path,
@@ -549,31 +509,19 @@ class Tracer:
                                 max_sums,
                             )
 
-            disp_img = cv2.circle(
-                disp_img, (global_yx[1], global_yx[0]), 1, (0, 0, 255), 2
-            )
-            # add line from previous to current point
-            if len(path) > 1:
-                disp_img = cv2.line(
-                    disp_img,
-                    (path[-2][1], path[-2][0]),
-                    (global_yx[1], global_yx[0]),
-                    (0, 0, 255),
-                    2,
-                )
-
-            if viz:
-                cv2.imshow("disp_img", disp_img)
-                cv2.waitKey(1)
-                # plt.imsave(f"trace_test/disp_img_{iter}.png", disp_img)
-
+            # Stoping case 3 : trace went backwards
             if len(path) > 10:
+
                 p = np.array(path)
+
                 for i in range(0, len(path) - 20):
+
                     diff = np.linalg.norm(p[i : i + 10] - p[-10:])
                     diffrev = np.linalg.norm(p[i : i + 10] - p[-10:][::-1])
+
                     if diff < 10 or diffrev < 30:
                         max_sums = find_crossings(image, path)
+
                         return (
                             path,
                             TraceEnd.RETRACE,
@@ -583,13 +531,90 @@ class Tracer:
                             max_sums,
                         )
 
-        out.release()
-        max_sums = find_crossings(image, path)
+            if viz:
 
+                model_np = model_input.detach().cpu().numpy().transpose(1, 2, 0)
+                cv2.imshow("model input", model_np)
+                plt.imsave(f"trace_test/model_input_{iter}.png", model_np)
+
+                cv2.circle(disp_img, tuple(global_yx[::-1]), 1, (0, 0, 255), 2)
+
+                if len(path) > 1:
+                    cv2.line(
+                        disp_img,
+                        tuple(path[-2][::-1]),
+                        tuple(global_yx[::-1]),
+                        (0, 0, 255),
+                        2,
+                    )
+                    cv2.circle(
+                        disp_img, tuple(endpoints[0][::-1]), 10, (0, 255, 255), -1
+                    )
+                    cv2.circle(
+                        disp_img, tuple(start_points[0][::-1]), 10, (255, 0, 255), -1
+                    )
+
+                cv2.imshow("disp_img", disp_img)
+                cv2.waitKey(1)
+                plt.imsave(f"trace_test/disp_img_{iter}.png", disp_img)
+
+                scaling_factor = 5
+                new_shape = tuple(np.array(model_np.shape[:2]) * scaling_factor)
+                input_np = cv2.resize(model_np.squeeze(), new_shape)
+
+                output_resized = cv2.resize(model_output_before, new_shape)
+
+                output_norm = cv2.normalize(
+                    output_resized, None, 0, 255, cv2.NORM_MINMAX
+                ).astype(np.uint8)
+
+                heatmap = cv2.applyColorMap(output_norm, cv2.COLORMAP_JET)
+
+                input_colored = (input_np * 255).astype(np.uint8)
+                overlay = cv2.addWeighted(input_colored, 0.6, heatmap, 0.4, 0)
+
+                canvas = np.zeros(
+                    (new_shape[0] + 50, sum(new_shape) + 150, 3), dtype=np.uint8
+                )
+
+                canvas[25 : new_shape[0] + 25, 25 : new_shape[1] + 25] = (
+                    input_np * 255
+                ).astype(np.uint8)
+
+                canvas[
+                    25 : new_shape[0] + 25, new_shape[1] + 50 : new_shape[1] * 2 + 50
+                ] = overlay
+
+                cv2.putText(
+                    canvas,
+                    f"{np.max(model_output):.4f}",
+                    (canvas.shape[1] - 100, canvas.shape[0] - 25),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (255, 255, 255),
+                    4,
+                )
+
+                cv2.imshow("canvas", canvas)
+                cv2.waitKey(1)
+                plt.imsave(f"trace_test/canvas_{iter}.png", canvas)
+
+        # Stoping case 4 : reached map steps
+        max_sums = find_crossings(image, path)
         return path, TraceEnd.FINISHED, heatmaps, crops, covariances, max_sums
 
-    def trace(self, img, prev_pixels, endpoints=None, path_len=20, viz=False, idx=0):
+    def trace(
+        self,
+        img,
+        prev_pixels,
+        endpoints=None,
+        path_len=20,
+        clips=None,
+        viz=False,
+        idx=0,
+    ):
 
+        # prev_pixels (list of N pixel points (x,y) - aligned with img
         pixels = self.center_pixels_on_cable(img, prev_pixels)
 
         for j in range(len(pixels)):
@@ -635,7 +660,8 @@ class Tracer:
             exact_path_len=path_len,
             endpoints=endpoints,
             model=self.trace_model,
-            viz=False,
+            clips=clips,
+            viz=True,
         )
         if viz:
             img_cp = (img.copy() * 255.0).astype(np.uint8)
@@ -712,7 +738,9 @@ class Tracer:
 
 class AnalyticTracer(Tracer):
     def trace(self, img, prev_pixels, endpoints=None, path_len=20, viz=False, idx=0):
+
         img = np.where(img[:, :, :3] > 100, 255, 0).astype("uint8")
+
         pixels = self.center_pixels_on_cable(img, prev_pixels)
         for j in range(len(pixels)):
             cur_pixel = pixels[j][0]
@@ -734,6 +762,7 @@ class AnalyticTracer(Tracer):
         )
         if spline is None:
             spline = prev_pixels
+
         return np.array(spline), trace_end
 
 

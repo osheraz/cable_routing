@@ -35,7 +35,7 @@ class ExperimentEnv:
         self.robot = YuMiRobotEnv(exp_config.robot_cfg)
         rospy.sleep(2)
 
-        # todo: add cfg support for this 2 to
+        # todo: add cfg support for this
         self.zed_cam = ZedCameraSubscriber()
         while self.zed_cam.rgb_image is None or self.zed_cam.depth_image is None:
             rospy.sleep(0.1)
@@ -55,6 +55,8 @@ class ExperimentEnv:
             config_path="/home/osheraz/cable_routing/data/board_config.json"
         )
         rospy.logwarn("Env is ready")
+
+        # TODO: cable class
 
     def set_board_region(self, img=None):
 
@@ -98,9 +100,9 @@ class ExperimentEnv:
 
                 # abort = input("Abort? (y/n): ") == "y"
 
-    def update_cable_path(self, start_points=None):
+    def update_cable_path(self, start_points=None, end_points=None):
 
-        path, _ = self.trace_cable(start_points=start_points)
+        path, _ = self.trace_cable(start_points=start_points, end_points=end_points)
 
         self.board.set_cable_path(path)
 
@@ -133,14 +135,11 @@ class ExperimentEnv:
         cable_ori = get_perpendicular_ori(
             path_in_world[idx - 1], path_in_world[idx + 1]
         )
-
         path_arr = np.array(path_in_world)
 
         if display:
-
             plt.figure()
             plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-", label="Cable Path")
-
             plt.plot(
                 world_coord[0],
                 world_coord[1],
@@ -152,18 +151,15 @@ class ExperimentEnv:
             b = np.array(path_in_world[idx - 1])[:2]
             a = np.array(path_in_world[idx + 1])[:2]
             mid = (b + a) / 2
-            ori_vec = np.array([np.cos(cable_ori), np.sin(cable_ori)])
 
-            plt.quiver(
-                mid[0],
-                mid[1],
-                ori_vec[0],
-                ori_vec[1],
-                angles="xy",
-                scale_units="xy",
-                scale=0.1,
-                color="r",
-                label="Grasp Orientation",
+            perp_vec = np.array([np.cos(cable_ori), np.sin(cable_ori)]) * 0.02
+
+            plt.plot(
+                [mid[0] - perp_vec[0], mid[0] + perp_vec[0]],
+                [mid[1] - perp_vec[1], mid[1] + perp_vec[1]],
+                "r-",
+                linewidth=2,
+                label="Perpendicular Orientation",
             )
 
             plt.xlabel("X")
@@ -174,26 +170,33 @@ class ExperimentEnv:
             plt.grid(True)
             plt.show()
 
-        self.robot.single_hand_grasp(world_coord, eef_rot=cable_ori, slow_mode=True)
+        self.robot.single_hand_grasp(
+            world_coord, eef_rot=cable_ori + np.pi / 2, slow_mode=True
+        )
 
     def get_extrinsic(self):
 
         return self.T_CAM_BASE
 
-    def trace_cable(self, img=None, start_points=None):
+    def trace_cable(self, img=None, start_points=None, end_points=None):
 
         p1, p2 = self.board.point1, self.board.point2
+
+        clips = self.board.get_clips()
+
         if img is None:
             img = self.zed_cam.rgb_image
 
-        # TODO: find a better way to set the board region, Handloom related
-        img = crop_img(img, p1, p2)
+        img = crop_img(img, p1, p2)  # TODO: fix!
 
         if start_points == None:
-            start_points = select_target_point(img)
+            start_points = select_target_point(img, rule="start")
+        if end_points == None:
+            end_points = select_target_point(img, rule="end")
 
-        path, status = self.tracer.trace(img=img, start_points=start_points)
-        cv2.destroyAllWindows()
+        path, status = self.tracer.trace(
+            img=img, start_points=start_points, end_points=end_points, clips=clips
+        )
 
         print("Tracing status:", status)
 
