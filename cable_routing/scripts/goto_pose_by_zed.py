@@ -2,7 +2,6 @@ import rospy
 import numpy as np
 import cv2
 from autolab_core import RigidTransform, Point
-from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 import tyro
 from autolab_core import RigidTransform, Point, CameraIntrinsics
@@ -16,40 +15,16 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     SCALE_FACTOR,
     define_board_region,
     select_target_point,
+    get_world_coord_from_pixel_coord,
 )
 
 
-def get_world_coord_from_pixel_coord(
-    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.805
-):
-    pixel_coord = np.array(pixel_coord, dtype=np.float32)
-
-    if image_shape and (
-        cam_intrinsics.width != image_shape[1]
-        or cam_intrinsics.height != image_shape[0]
-    ):
-        scale_x = cam_intrinsics.width / image_shape[1]
-        scale_y = cam_intrinsics.height / image_shape[0]
-        pixel_coord[0] *= scale_x
-        pixel_coord[1] *= scale_y
-
-    pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
-    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * table_depth
-
-    point_3d_world = (
-        cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
-    )
-
-    return point_3d_world
-
-
 def main(args: ExperimentConfig):
-    """Main function to run the robot-camera interaction loop."""
     rospy.init_node("zed_yumi_integration")
 
     yumi = YuMiRobotEnv(args.robot_cfg)
-    # yumi.close_grippers()
-    yumi.open_grippers()
+    yumi.close_grippers()
+    # yumi.open_grippers()
 
     zed_cam = ZedCameraSubscriber()
     rospy.loginfo("Waiting for images from ZED camera...")
@@ -101,19 +76,19 @@ def main(args: ExperimentConfig):
 
     print("World Coordinate: ", world_coord)
 
-    # yumi.single_hand_grasp(world_coord, slow_mode=True)
+    yumi.single_hand_grasp(world_coord, eef_rot=np.pi / 2, slow_mode=True)
 
-    yumi.dual_hand_grasp(
-        world_coord=world_coord,
-        axis="x",
-        slow_mode=True,
-    )
+    # yumi.dual_hand_grasp(
+    #     world_coord=world_coord,
+    #     axis="x",
+    #     slow_mode=True,
+    # )
 
-    world_coord[2] += 0.1
-    world_coord[0] -= 0.1
-    world_coord[1] += 0.1
-    yumi.rotate_dual_hands_around_center(angle=np.pi / 2)
-    yumi.move_dual_hand_insertion(world_coord)
+    # world_coord[2] += 0.1
+    # world_coord[0] -= 0.1
+    # world_coord[1] += 0.1
+    # yumi.rotate_dual_hands_around_center(angle=np.pi / 2)
+    # yumi.move_dual_hand_insertion(world_coord)
     # yumi.slide_hand(arm="left", axis="x", amount=0.1)
 
     # world_coord[2] += 0.1

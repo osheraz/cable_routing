@@ -16,6 +16,7 @@ class YuMiRobotEnv:
         self.interface = Interface(speed=0.2)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
+
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
@@ -24,7 +25,10 @@ class YuMiRobotEnv:
 
     def move_to_home(self) -> None:
         """Moves both arms to the home position."""
-        self.interface.home()
+        # self.interface.home()
+        home_left = self.robot_config.LEFT_HOME_POS
+        home_right = self.robot_config.RIGHT_HOME_POS
+        self.set_joint_positions(left_positions=home_left, right_positions=home_right)
 
     def close_grippers(
         self, side: Literal["both", "left", "right"] = "both", wait: bool = False
@@ -247,7 +251,7 @@ class YuMiRobotEnv:
         pass
 
     def single_hand_grasp(
-        self, world_coord: np.ndarray, slow_mode: bool = True
+        self, world_coord: np.ndarray, eef_rot: float = np.pi, slow_mode: bool = True
     ) -> None:
         """ """
 
@@ -256,9 +260,10 @@ class YuMiRobotEnv:
         print(f"Moving {arm} arm to the target position.")
 
         # Move above the target
-        target_pose = RigidTransform(
-            rotation=RigidTransform.x_axis_rotation(np.pi), translation=world_coord
+        rot = RigidTransform.x_axis_rotation(np.pi) @ RigidTransform.z_axis_rotation(
+            eef_rot
         )
+        target_pose = RigidTransform(rotation=rot, translation=world_coord)
 
         target_pose.translation[2] += 0.1
 
@@ -283,11 +288,11 @@ class YuMiRobotEnv:
         self.close_grippers(side=arm, wait=True)
         self.interface.yumi.set_speed(original_speed)
 
-        # target_pose.translation[2] += 0.05
-        # self.set_ee_pose(
-        #     left_pose=target_pose if arm == "left" else None,
-        #     right_pose=target_pose if arm == "right" else None,
-        # )
+        target_pose.translation[2] += 0.05
+        self.set_ee_pose(
+            left_pose=target_pose if arm == "left" else None,
+            right_pose=target_pose if arm == "right" else None,
+        )
 
         print(f"{arm.capitalize()} arm grasp completed.")
 

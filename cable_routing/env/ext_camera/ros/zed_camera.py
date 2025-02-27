@@ -14,11 +14,11 @@ class ZedCameraSubscriber:
         topic_rgb="/zedm/zed_node/rgb/image_rect_color",
         display=False,
     ):
-
+        print("Waiting for camera info")
         camera_info = rospy.wait_for_message(
             "/zedm/zed_node/depth/camera_info", CameraInfo
         )
-
+        print("Got camera info")
         self.intrinsic = CameraIntrinsics(
             fx=camera_info.K[0],
             fy=camera_info.K[4],

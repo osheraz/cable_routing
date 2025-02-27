@@ -23,3 +23,8 @@ debug/
 __pycache__/
 *.pyc
 *.pyo
+
+/cable_routing/handloom/data
+/cable_routing/handloom/images
+/cable_routing/handloom/trace_test
+/trace_test

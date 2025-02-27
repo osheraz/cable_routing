@@ -1,7 +1,79 @@
+import re
 import cv2
 import numpy as np
 
 SCALE_FACTOR = 1.0
+
+
+def get_perpendicular_ori(b, a):
+    b, a = np.array(b)[:2], np.array(a)[:2]
+    tangent = a - b
+    tangent /= np.linalg.norm(tangent)
+
+    perp_vec = np.array([-tangent[1], tangent[0]])
+    return np.arctan2(perp_vec[1], perp_vec[0])
+
+
+def find_nearest_point(path, coordinate):
+    path_array = np.array(path)
+    idx = np.argmin(np.sum((path_array - coordinate) ** 2, axis=1))
+    return path[idx], idx
+
+
+def pick_target_on_path(img, path):
+    img_display = img.copy()
+
+    for x, y in path:
+        cv2.circle(img_display, (x, y), 2, (0, 255, 0), -1)
+
+    selected_point = select_target_point(img_display)
+    if selected_point is not None:
+        cv2.destroyAllWindows()
+        return selected_point
+
+
+def get_world_coord_from_pixel_coord(
+    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.8
+):
+    pixel_coord = np.array(pixel_coord, dtype=np.float32)
+
+    if image_shape and (
+        cam_intrinsics.width != image_shape[1]
+        or cam_intrinsics.height != image_shape[0]
+    ):
+        scale_x = cam_intrinsics.width / image_shape[1]
+        scale_y = cam_intrinsics.height / image_shape[0]
+        pixel_coord[0] *= scale_x
+        pixel_coord[1] *= scale_y
+
+    pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
+    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * table_depth
+
+    point_3d_world = (
+        cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
+    )
+
+    return point_3d_world
+
+
+def crop_board(img):
+
+    point1, point2 = define_board_region(img)[0]
+
+    x1, x2, y1, y2 = (
+        min(point1[0], point2[0]),
+        max(point1[0], point2[0]),
+        min(point1[1], point2[1]),
+        max(point1[1], point2[1]),
+    )
+    return img[y1:y2, x1:x2], (x1, y1), (x2, y2)
+
+
+def crop_img(img, point1, point2):
+
+    (x1, y1), (x2, y2) = point1, point2
+
+    return img[y1:y2, x1:x2]
 
 
 def green_color_segment(point_cloud, display=True):
@@ -117,13 +189,14 @@ def define_board_region(image):
     return board_rect
 
 
-def select_target_point(image):
+def select_target_point(image, rule="start"):
     """
     Displays the image and allows user to select a target point.
     """
+
     params = {"u": None, "v": None}
-    cv2.imshow("Select Target Point", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-    cv2.setMouseCallback("Select Target Point", click_event, param=params)
+    cv2.imshow(f"Select {rule} Point", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    cv2.setMouseCallback(f"Select {rule} Point", click_event, param=params)
 
     while params["u"] is None or params["v"] is None:
         if cv2.waitKey(1) & 0xFF == 27:

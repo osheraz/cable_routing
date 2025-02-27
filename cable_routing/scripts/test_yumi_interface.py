@@ -6,6 +6,8 @@ def run():
     interface = Interface(speed=0.26)
     print(interface.get_FK("left"))
     print(interface.get_FK("right"))
+    print(interface.get_joint_positions("left"))
+    print(interface.get_joint_positions("right"))
     interface.home()
     interface.calibrate_grippers()
     interface.open_grippers()
