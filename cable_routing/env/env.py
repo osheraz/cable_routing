@@ -10,7 +10,7 @@ import datetime
 import os
 import math
 from autolab_core import RigidTransform, Point, CameraIntrinsics
-from cable_routing.configs.envconfig import ExperimentConfig
+from cable_routing.configs.envconfig import ExperimentConfig, ZedMiniConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
 from cable_routing.env.board.board import Board
@@ -318,6 +318,13 @@ class ExperimentEnv:
         path = [(x + p1[0], y + p1[1]) for x, y in path]
 
         return path, status
+
+    def trace_cable_with_clips(self, img=None):
+        """
+        Kavish implementation of tracing with clips by finding start
+        points next to them
+        """
+
 
     def trace_cable_from_clips(
         self, img=None, start_points=None, end_points=None, viz=True
