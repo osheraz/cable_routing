@@ -16,6 +16,7 @@ from cable_routing.handloom.model_training.src.model import KeypointsGauss
 from cable_routing.handloom.model_training.config import *
 from cable_routing.handloom.analytic_tracer import simple_uncertain_trace_single
 import time
+import datetime
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -45,7 +46,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def find_crossings(img, points, viz=True, radius=20, num_neighbors=1):
+def find_crossings(img, points, viz=False, radius=20, num_neighbors=1):
     img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     w, h = img_gray.shape
     xx, yy = np.meshgrid(np.linspace(0, h - 1, h), np.linspace(0, w - 1, w))
@@ -66,6 +67,7 @@ def find_crossings(img, points, viz=True, radius=20, num_neighbors=1):
     # max_sums = [m / max_intensity for m in max_sums]
     min_max_norm = lambda x: (x - np.min(x)) / (np.max(x) - np.min(x))
     max_sums = min_max_norm(max_sums)
+
     if viz:
 
         fig, axs = plt.subplots(1, 1, figsize=(8, 8))
@@ -92,6 +94,7 @@ class TraceEnd(Enum):
     ENDPOINT = 2
     FINISHED = 3
     RETRACE = 4
+    CLIP = 5
 
 
 class Tracer:
@@ -172,7 +175,7 @@ class Tracer:
         points = points[-num_points:]
         return np.array(points)
 
-    def center_pixels_on_cable(self, image, pixels, display=False):
+    def center_pixels_on_cable(self, image, pixels, display=True):
         # for each pixel, find closest pixel on cable
         image_mask = image[:, :, 0] > 100
         # erode white pixels
@@ -368,6 +371,8 @@ class Tracer:
         viz=False,
         model=None,
         sample=False,
+        idx=1,
+        save_folder="./trace_test",
     ):
 
         # TODO: Refactor this mess
@@ -408,6 +413,7 @@ class Tracer:
             model_output = cv2.resize(model_output, (crop.shape[1], crop.shape[0]))
 
             model_output_before = model_output.copy()
+
             # undo rotation if done in preprocessing
             M = cv2.getRotationMatrix2D(
                 (model_output.shape[1] / 2, model_output.shape[0] / 2),
@@ -509,17 +515,36 @@ class Tracer:
                                 max_sums,
                             )
 
+            # Stoping case 5 : trace went backwards
+            if clips is not None:
+                for clip in clips:
+                    if (abs(global_yx[0] - clip["y"])) < self.ep_buffer * 1.5 and (
+                        abs(global_yx[1] - clip["x"])
+                    ) < self.ep_buffer * 1.5:
+
+                        max_sums = find_crossings(image, path)
+                        # TODO: fix - only if the tracing moving backwards
+                        return (
+                            path,
+                            TraceEnd.CLIP,
+                            heatmaps,
+                            crops,
+                            covariances,
+                            max_sums,
+                        )
+
             # Stoping case 3 : trace went backwards
-            if len(path) > 10:
+            K = 10
+            if len(path) > K:
 
                 p = np.array(path)
 
-                for i in range(0, len(path) - 20):
+                for i in range(0, len(path) - K):  # 2
 
-                    diff = np.linalg.norm(p[i : i + 10] - p[-10:])
-                    diffrev = np.linalg.norm(p[i : i + 10] - p[-10:][::-1])
+                    diff = np.linalg.norm(p[i : i + K] - p[-K:])
+                    diffrev = np.linalg.norm(p[i : i + K] - p[-K:][::-1])
 
-                    if diff < 10 or diffrev < 30:
+                    if diff < K or diffrev < 3 * K:
                         max_sums = find_crossings(image, path)
 
                         return (
@@ -534,8 +559,8 @@ class Tracer:
             if viz:
 
                 model_np = model_input.detach().cpu().numpy().transpose(1, 2, 0)
-                cv2.imshow("model input", model_np)
-                plt.imsave(f"trace_test/model_input_{iter}.png", model_np)
+                # cv2.imshow("model input", model_np)
+                # plt.imsave(f"trace_test/model_input_{iter}.png", model_np)
 
                 cv2.circle(disp_img, tuple(global_yx[::-1]), 1, (0, 0, 255), 2)
 
@@ -554,9 +579,15 @@ class Tracer:
                         disp_img, tuple(start_points[0][::-1]), 10, (255, 0, 255), -1
                     )
 
+                if clips is not None:
+                    for clip in clips:
+                        cv2.circle(
+                            disp_img, (clip["x"], clip["y"]), 10, (255, 255, 255), -1
+                        )
+
                 cv2.imshow("disp_img", disp_img)
                 cv2.waitKey(1)
-                plt.imsave(f"trace_test/disp_img_{iter}.png", disp_img)
+                plt.imsave(f"{save_folder}/{idx}_disp_img_{iter}.png", disp_img)
 
                 scaling_factor = 5
                 new_shape = tuple(np.array(model_np.shape[:2]) * scaling_factor)
@@ -595,9 +626,9 @@ class Tracer:
                     4,
                 )
 
-                cv2.imshow("canvas", canvas)
+                cv2.imshow("input_output", canvas)
                 cv2.waitKey(1)
-                plt.imsave(f"trace_test/canvas_{iter}.png", canvas)
+                plt.imsave(f"{save_folder}/{idx}_input_output_{iter}.png", canvas)
 
         # Stoping case 4 : reached map steps
         max_sums = find_crossings(image, path)
@@ -610,8 +641,9 @@ class Tracer:
         endpoints=None,
         path_len=20,
         clips=None,
-        viz=False,
+        viz=True,
         idx=0,
+        save_folder="./trace_test",
     ):
 
         # prev_pixels (list of N pixel points (x,y) - aligned with img
@@ -662,11 +694,13 @@ class Tracer:
             model=self.trace_model,
             clips=clips,
             viz=True,
+            idx=idx,
+            save_folder=save_folder,
         )
         if viz:
             img_cp = (img.copy() * 255.0).astype(np.uint8)
             trace_viz = self.visualize_path(img_cp, spline.copy())
-            # plt.imsave(f"./trace_test/trace_{idx}.png", trace_viz)
+            plt.imsave(f"{save_folder}/trace_{idx}.png", trace_viz)
 
         spline = np.array(spline)
         spline = np.concatenate((starting_points, spline), axis=0)

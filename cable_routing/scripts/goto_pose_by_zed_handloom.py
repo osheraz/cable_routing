@@ -14,7 +14,7 @@ def main(args: ExperimentConfig):
 
     rospy.init_node("handloom_integration")
     env = ExperimentEnv(args)
-    env.check_calibration()
+    # env.check_calibration()
 
     path = env.update_cable_path()
     env.goto_cable_node(path)

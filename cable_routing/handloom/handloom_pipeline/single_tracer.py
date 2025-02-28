@@ -1,6 +1,10 @@
 import numpy as np
 import cv2
-from cable_routing.handloom.handloom_pipeline.tracer import AnalyticTracer, Tracer
+from cable_routing.handloom.handloom_pipeline.tracer import (
+    AnalyticTracer,
+    TraceEnd,
+    Tracer,
+)
 
 
 class CableTracer:
@@ -14,7 +18,16 @@ class CableTracer:
             img = cv2.bitwise_not(img)
         return np.stack([img] * 3, axis=-1).squeeze()
 
-    def trace(self, img, start_points, end_points=None, clips=None):
+    def trace(
+        self,
+        img,
+        start_points,
+        end_points=None,
+        clips=None,
+        save_folder="./trace_test",
+        last_path=None,
+        idx=1,
+    ):
 
         img = self.convert_to_handloom_input(img, invert=False)
 
@@ -24,9 +37,12 @@ class CableTracer:
 
         img_cp = img.copy()
 
-        start_pixels, _ = self.analytic_tracer.trace(
-            img, start_pixels, endpoints=end_points, path_len=3, viz=False, idx=100
-        )
+        if last_path is None:
+            start_pixels, _ = self.analytic_tracer.trace(
+                img, start_pixels, endpoints=end_points, path_len=3, viz=False, idx=100
+            )
+        else:
+            start_pixels = np.flip(last_path[-4:], axis=1)
 
         if len(start_pixels) < 3:
             print("Failed analytical trace")
@@ -39,7 +55,8 @@ class CableTracer:
             path_len=200,
             clips=clips,
             viz=True,
-            idx=100,
+            idx=idx,
+            save_folder=save_folder,
         )
 
         path = np.flip(path, axis=1)

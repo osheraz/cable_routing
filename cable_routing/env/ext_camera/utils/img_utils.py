@@ -11,7 +11,7 @@ def get_perpendicular_ori(b, a):
     tangent /= np.linalg.norm(tangent)
 
     perp_vec = np.array([-tangent[1], tangent[0]])
-    return np.arctan2(perp_vec[1], perp_vec[0])
+    return np.arctan2(perp_vec[1], perp_vec[0]) + np.pi / 2
 
 
 def find_nearest_point(path, coordinate):

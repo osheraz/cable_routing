@@ -22,6 +22,21 @@ class Board:
                 return []
         return []
 
+    def find_nearest_clip(self, path):
+
+        clips = self.get_clips()
+
+        last_point = np.array(path[-1])
+
+        nearest_clip = min(
+            clips,
+            key=lambda clip: np.linalg.norm(
+                np.array([clip["x"], clip["y"]]) - last_point
+            ),
+        )
+
+        return nearest_clip
+
     def set_cable_path(self, cable_positions):
         self.cable_positions = cable_positions
 

@@ -10,18 +10,28 @@ WORKSPACE_MAX_X = -1
 WORKSPACE_MIN_Y = 0
 WORKSPACE_MAX_Y = 600
 
-def get_edge_mask(img, x_min=None, x_max=None, y_min=None, y_max=None, addtl_padding=20):
+
+def get_edge_mask(
+    img, x_min=None, x_max=None, y_min=None, y_max=None, addtl_padding=20
+):
     x_min = x_min if x_min is not None else WORKSPACE_MIN_X
     x_max = x_max if x_max is not None else WORKSPACE_MAX_X
     y_min = y_min if y_min is not None else WORKSPACE_MIN_Y
     y_max = y_max if y_max is not None else WORKSPACE_MAX_Y
 
     copied_img = img.copy()
-    copied_img[y_min+addtl_padding:y_max-addtl_padding, x_min+addtl_padding:x_max-addtl_padding, :] = 0
+    copied_img[
+        y_min + addtl_padding : y_max - addtl_padding,
+        x_min + addtl_padding : x_max - addtl_padding,
+        :,
+    ] = 0
     return (copied_img > 0)[:, :, 0]
 
+
 def get_all_edge_candidates(img, x_min=None, x_max=None, y_min=None, y_max=None):
-    edge_mask = get_edge_mask(img, x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, addtl_padding=1)
+    edge_mask = get_edge_mask(
+        img, x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max, addtl_padding=1
+    )
     ret = cv2.connectedComponentsWithStats(edge_mask.astype(np.uint8), 4, cv2.CV_32S)
     num_components, labels, stats, centroids = ret
     successors = []
@@ -29,14 +39,19 @@ def get_all_edge_candidates(img, x_min=None, x_max=None, y_min=None, y_max=None)
         successors.append(closest_nonzero_pixel(centroids[i][::-1], edge_mask))
     return np.array(successors)
 
+
 def cable_inaccessible(img, visited):
     visited_mask = np.zeros(img.shape[:2], np.uint8)
     for pt in visited.keys():
         visited_mask[pt[0], pt[1]] = 1
-    visited_mask = (cv2.dilate(visited_mask, np.ones((24, 24), np.uint8)) > 0)
+    visited_mask = cv2.dilate(visited_mask, np.ones((24, 24), np.uint8)) > 0
     img_dilated = (img > 0).astype(np.uint8)[:, :, 0] > 0
-    untraversed_cable = cv2.dilate((img_dilated & ~visited_mask).astype(np.uint8), np.ones((24, 24), np.uint8))
-    num_components, labels, stats, centroids = cv2.connectedComponentsWithStats(untraversed_cable, 4, cv2.CV_32S)
+    untraversed_cable = cv2.dilate(
+        (img_dilated & ~visited_mask).astype(np.uint8), np.ones((24, 24), np.uint8)
+    )
+    num_components, labels, stats, centroids = cv2.connectedComponentsWithStats(
+        untraversed_cable, 4, cv2.CV_32S
+    )
     num_components_not_touching_edge = 0
     num_total_components = 0
     edge_mask = get_edge_mask(img, addtl_padding=1)
@@ -49,6 +64,7 @@ def cable_inaccessible(img, visited):
             num_total_components += 1
     return num_total_components > 1 and num_components_not_touching_edge > 0
 
+
 def get_dist_cumsum(lst):
     lst_shifted = np.array(lst[1:])
     distances = np.linalg.norm(lst_shifted - np.array(lst[:-1]), axis=1)
@@ -56,9 +72,12 @@ def get_dist_cumsum(lst):
     distances_cumsum = np.concatenate(([0], np.cumsum(distances)))
     return distances_cumsum
 
+
 def black_on_path(color_img, pt, next_pt, num_to_check=10, dilate=True):
     # dilation should be precomputed
-    img_to_use = cv2.dilate(color_img, np.ones((2, 2), np.uint8)) if dilate else color_img#.copy()
+    img_to_use = (
+        cv2.dilate(color_img, np.ones((2, 2), np.uint8)) if dilate else color_img
+    )  # .copy()
     # if np.linalg.norm(pt - next_pt) < 5:
     #     return 0.0
     num_black = 0
@@ -67,20 +86,22 @@ def black_on_path(color_img, pt, next_pt, num_to_check=10, dilate=True):
         cur_pt = pt + (next_pt - pt) * (i / num_to_check)
         if img_to_use[int(cur_pt[0]), int(cur_pt[1])] == 0:
             num_black += 1
-    return num_black/num_to_check
+    return num_black / num_to_check
+
 
 def erode_image(img, kernel=(1, 1)):
     img = img.astype(np.uint8)
     kernel = np.ones(kernel, np.uint8)
     return cv2.erode(img, kernel)
 
+
 def remove_specks(color_img):
     window_size = 5
-    # remove tiny regions of stray white pixels 
+    # remove tiny regions of stray white pixels
     for i in range(color_img.shape[0] - window_size):
         for j in range(color_img.shape[1] - window_size):
-            if np.sum(color_img[i:i+window_size, j:j+window_size, 0] > 0) < 3:
-                color_img[i+window_size//2, j+window_size//2, :] = 0
+            if np.sum(color_img[i : i + window_size, j : j + window_size, 0] > 0) < 3:
+                color_img[i + window_size // 2, j + window_size // 2, :] = 0
 
     # zero out all edges of image
     color_img[0:window_size, :, :] = 0
@@ -90,16 +111,21 @@ def remove_specks(color_img):
 
     return color_img
 
+
 def closest_nonzero_pixel(pt, depth_img):
     # find the closest nonzero pixel to pt
     nonzero_pixels = np.nonzero(depth_img)
     # print(nonzero_pixels[0].shape)
     pts_combined = np.array([nonzero_pixels[0], nonzero_pixels[1]]).T
-    distances = np.sqrt((pts_combined[:, 0] - pt[0]) ** 2 + (pts_combined[:, 1] - pt[1]) ** 2)
+    distances = np.sqrt(
+        (pts_combined[:, 0] - pt[0]) ** 2 + (pts_combined[:, 1] - pt[1]) ** 2
+    )
     return pts_combined[np.argmin(distances)]
+
 
 def normalize(vec):
     return vec / np.linalg.norm(vec)
+
 
 def pixel_to_dist_from_nearest_black_point(image):
 
@@ -109,7 +135,7 @@ def pixel_to_dist_from_nearest_black_point(image):
     dq = deque()
     for i in range(len(all_black[0])):
         dq.append(np.array((all_black[0][i], all_black[1][i])))
-    
+
     # initialize distances to infinity
     distances = np.full(image.shape, np.inf)
     distances[all_black] = 0
@@ -128,7 +154,7 @@ def pixel_to_dist_from_nearest_black_point(image):
     #     # update distances
     #     for i in range(len(q)):
     #         distances[cur_pt_tuple] = min(distances[cur_pt_tuple], closest_dist + np.linalg.norm(q[i] - closest_point))
-    
+
     # run BFS
     iters = 0
     while len(dq) > 0:
@@ -136,17 +162,22 @@ def pixel_to_dist_from_nearest_black_point(image):
         if iters % 100000 == 0:
             print("Iter", iters)
         next_pt = dq.popleft()
-        
+
         # update distances
         for i in range(-1, 2):
             for j in range(-1, 2):
                 cur_pt = next_pt + np.array((i, j))
-                if not (cur_pt[0] < 0 or cur_pt[1] < 0 or cur_pt[0] >= image.shape[0]
-                        or cur_pt[1] >= image.shape[1]):
-                    if (distances[tuple(cur_pt)] == np.inf):
+                if not (
+                    cur_pt[0] < 0
+                    or cur_pt[1] < 0
+                    or cur_pt[0] >= image.shape[0]
+                    or cur_pt[1] >= image.shape[1]
+                ):
+                    if distances[tuple(cur_pt)] == np.inf:
                         distances[tuple(cur_pt)] = distances[tuple(next_pt)] + 1
                         dq.append(cur_pt)
     return distances
+
 
 def smooth_depth(depth_img):
     depth_cpy = depth_img.copy()
@@ -159,13 +190,18 @@ def smooth_depth(depth_img):
             depth_img[i, j] = 0
             for di in range(-1, 2):
                 for dj in range(-1, 2):
-                    if (i + di >= 0 and i + di < depth_img.shape[0] and \
-                        j + dj >= 0 and j + dj < depth_img.shape[1] and \
-                        depth_cpy[i + di, j + dj] > 0):
+                    if (
+                        i + di >= 0
+                        and i + di < depth_img.shape[0]
+                        and j + dj >= 0
+                        and j + dj < depth_img.shape[1]
+                        and depth_cpy[i + di, j + dj] > 0
+                    ):
                         depth_img[i, j] += depth_cpy[i + di, j + dj]
                         cnt += 1
             depth_img[i, j] /= cnt
     return depth_img
+
 
 def visualize_depth_map_in_3d(depth):
     plt.imshow(depth)
@@ -193,19 +229,22 @@ def visualize_depth_map_in_3d(depth):
     y = np.array(lz[1]).squeeze()
     z = np.array(lz[2]).squeeze()
 
-    data = [go.Scatter3d(
-        x=x,
-        y=y,
-        z=z,
-        mode='markers',
-        marker=dict(
-            size=2,
+    data = [
+        go.Scatter3d(
+            x=x,
+            y=y,
+            z=z,
+            mode="markers",
+            marker=dict(
+                size=2,
+            ),
         )
-    )]
+    ]
     # show the plot
     fig = go.Figure(data=data)
     fig.show()
     # exit()
+
 
 def visualize_spline_in_3d(img, path, plotly=True):
     points = []
@@ -213,35 +252,45 @@ def visualize_spline_in_3d(img, path, plotly=True):
         pt = pt.astype(int)
         pt = closest_nonzero_pixel(pt, img[:, :, 3])
         points.append(np.array([pt[0], pt[1], img[pt[0], pt[1], 3]]))
-    
+
     lz = list(zip(*points))
     xs = np.array(lz[0]).squeeze()
     ys = np.array(lz[1]).squeeze()
     zs = np.array(lz[2]).squeeze()
 
     if plotly:
-        fig = go.Figure(data=[go.Scatter3d(
-            x=xs,
-            y=ys,
-            z=zs,
-            mode='markers+lines',
-            marker=dict(
-                size=2,
-                color=[i for i in range(len(xs))],
-            ),
-            line=dict(
-                color=[i for i in range(len(xs))],
-            )
-        )])
+        fig = go.Figure(
+            data=[
+                go.Scatter3d(
+                    x=xs,
+                    y=ys,
+                    z=zs,
+                    mode="markers+lines",
+                    marker=dict(
+                        size=2,
+                        color=[i for i in range(len(xs))],
+                    ),
+                    line=dict(
+                        color=[i for i in range(len(xs))],
+                    ),
+                )
+            ]
+        )
         fig.show()
     else:
-        ax = plt.axes(projection='3d')
+        ax = plt.axes(projection="3d")
         for i in range(len(xs) - 1):
-            ax.plot3D([xs[i], xs[i + 1]], [ys[i], ys[i + 1]], [zs[i], zs[i + 1]], c = [i/len(xs), 0, 1 - i/len(xs)])
+            ax.plot3D(
+                [xs[i], xs[i + 1]],
+                [ys[i], ys[i + 1]],
+                [zs[i], zs[i + 1]],
+                c=[i / len(xs), 0, 1 - i / len(xs)],
+            )
         plt.show()
 
+
 def dedup_and_center(image, points, dedup_dist):
-    # greedy deduplicate points within distance 
+    # greedy deduplicate points within distance
     filtered_points = []
     too_close = False
     for pt in points:
@@ -251,13 +300,13 @@ def dedup_and_center(image, points, dedup_dist):
                 break
         if not too_close:
             filtered_points.append(pt)
-    
+
     centered_points = []
     for pt in filtered_points:
         centered_points.append(closest_nonzero_pixel(pt, image[:, :, 0]))
 
     return np.array(centered_points)
-    
+
 
 def grid_cable(image, vis=False, res=20, dedup_dist=14):
     orig_image = image.copy()
@@ -281,6 +330,7 @@ def grid_cable(image, vis=False, res=20, dedup_dist=14):
 
     return points
 
+
 def grid_cable_bfs(image, vis=False, res=40):
     queue = deque()
 
@@ -288,7 +338,9 @@ def grid_cable_bfs(image, vis=False, res=40):
     visited = np.zeros(image.shape[:2])
     counter = 0
     while visited.sum() < (image[:, :, 0] > 0).sum():
-        start_point = closest_nonzero_pixel(np.array([0, 0]), (image[:, :, 0] > 0) - visited)
+        start_point = closest_nonzero_pixel(
+            np.array([0, 0]), (image[:, :, 0] > 0) - visited
+        )
         visited[start_point[0], start_point[1]] = 1
         queue.append((start_point, 0))
         while len(queue) > 0:
@@ -301,7 +353,12 @@ def grid_cable_bfs(image, vis=False, res=40):
                     if i == 0 and j == 0:
                         continue
                     next_pt = cur_pt[0] + np.array((i, j))
-                    if next_pt[0] < 0 or next_pt[1] < 0 or next_pt[0] >= image.shape[0] or next_pt[1] >= image.shape[1]:
+                    if (
+                        next_pt[0] < 0
+                        or next_pt[1] < 0
+                        or next_pt[0] >= image.shape[0]
+                        or next_pt[1] >= image.shape[1]
+                    ):
                         continue
                     if visited[next_pt[0], next_pt[1]] == 1:
                         continue
@@ -319,23 +376,36 @@ def grid_cable_bfs(image, vis=False, res=40):
 
     return points
 
+
 def visualize_path(img, path, black=False):
     def color_for_pct(pct):
-        return colorsys.hsv_to_rgb(pct, 1, 1)[0] * 255, colorsys.hsv_to_rgb(pct, 1, 1)[1] * 255, colorsys.hsv_to_rgb(pct, 1, 1)[2] * 255
+        return (
+            colorsys.hsv_to_rgb(pct, 1, 1)[0] * 255,
+            colorsys.hsv_to_rgb(pct, 1, 1)[1] * 255,
+            colorsys.hsv_to_rgb(pct, 1, 1)[2] * 255,
+        )
         # return (255*(1 - pct), 150, 255*pct) if not black else (0, 0, 0)
+
     img = img.copy()[:, :, :3].astype(np.uint8)
     for i in range(len(path) - 1):
         # if path is ordered dict, use below logic
         if not isinstance(path, OrderedDict):
             pt1 = tuple(path[i].astype(int))
-            pt2 = tuple(path[i+1].astype(int))
+            pt2 = tuple(path[i + 1].astype(int))
         else:
             path_keys = list(path.keys())
             pt1 = path_keys[i]
             pt2 = path_keys[i + 1]
             # print(pt1, pt2)
-        cv2.line(img, pt1[::-1], pt2[::-1], color_for_pct(i/len(path)), 2 if not black else 5)
+        cv2.line(
+            img,
+            pt1[::-1],
+            pt2[::-1],
+            color_for_pct(i / len(path)),
+            2 if not black else 5,
+        )
     return img
+
 
 def score_path(color_img, depth_img, points):
     # get the MLE score for a given path through the image
@@ -358,38 +428,48 @@ def score_path(color_img, depth_img, points):
     total_angle_change = 0
     cur_dir = normalize(points[1] - points[0])
     for i in range(1, len(points) - 1):
-        new_dir = normalize(points[i+1] - points[i])
+        new_dir = normalize(points[i + 1] - points[i])
         # print(new_dir.dot(cur_dir))
-        total_angle_change += abs(np.arccos(np.clip(new_dir.dot(cur_dir), -1, 1)))**2
+        total_angle_change += abs(np.arccos(np.clip(new_dir.dot(cur_dir), -1, 1))) ** 2
         cur_dir = new_dir
     total_angle_change /= len(points)
-    return -total_angle_change*5 + coverage_score
+    return -total_angle_change * 5 + coverage_score
+
 
 def get_best_path(image, finished_paths, stop_when_crossing=False):
     # init best score to min possible python value
-    best_score, best_path = float('-inf'), None
+    best_score, best_path = float("-inf"), None
     for path in finished_paths:
-        score = score_path(image[:, :, :3], image[:, :, 3], path, partial_paths=stop_when_crossing)
+        score = score_path(
+            image[:, :, :3], image[:, :, 3], path, partial_paths=stop_when_crossing
+        )
         if score > best_score:
             best_score = score
             best_path = path
     print("Best score", best_score, "Best path", best_path is not None)
     return best_path
 
+
 def sort_paths_by_score(image, finished_paths, stop_when_crossing=False):
     # return a list of paths sorted by score
     scores = []
     for path in finished_paths:
-        scores.append(score_path(image[:, :, :3], image[:, :, 3], path, partial_paths=stop_when_crossing))
+        scores.append(
+            score_path(
+                image[:, :, :3], image[:, :, 3], path, partial_paths=stop_when_crossing
+            )
+        )
     return np.array(finished_paths)[np.argsort(scores)]
+
 
 def visualize_edges(image, edges):
     image = image.copy()
     for pt in edges.keys():
-        plt.scatter(*pt[::-1], s=10, c='r')
+        plt.scatter(*pt[::-1], s=10, c="r")
         for second_pt in edges[pt]:
             cv2.line(image, pt[::-1], second_pt[0][::-1], (0, 0, 255), 1)
     return image
+
 
 def delete_overlap_points(path, threshold=4):
     # delete points that are far apart in the spline
@@ -411,7 +491,7 @@ def delete_overlap_points(path, threshold=4):
 
 
 if __name__ == "__main__":
-    img_path = 'data_bank/series_simple/1640295900/color_0.npy' #'data_bank/large_overhand_drop/1640297206/color_0.npy' #'data_bank/large_figure8_simple/1640297369/color_0.npy'
+    img_path = "data_bank/series_simple/1640295900/color_0.npy"  #'data_bank/large_overhand_drop/1640297206/color_0.npy' #'data_bank/large_figure8_simple/1640297369/color_0.npy'
     color_img = np.load(img_path)
 
     color_img[600:, :, :] = 0
@@ -420,4 +500,3 @@ if __name__ == "__main__":
     color_img = remove_specks(np.where(color_img < 80, 0, 255))
 
     grid_cable_bfs(color_img, vis=True)
-
