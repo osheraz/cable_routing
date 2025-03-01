@@ -342,7 +342,7 @@ class BoardFeature:
     
 
 # Correction algorithm, unclean implementation
-def levenshtein_algo(given, desired, environment):
+def levenshtein_algo(given, desired, environment, human_readable = True):
     """
     Given two sequences of coordinates, "given" and "desired", provide the minimum-cost sequence of additions, removals and swaps to produce "desired" from "given".
 
@@ -350,6 +350,7 @@ def levenshtein_algo(given, desired, environment):
                     given (list[(int, int), ...]): The current sequence of coordinates (usually keypoints) for a given cable
                     desired (list[(int, int), ...]): The desired sequence of coordinates (usually keypoints) for the cable
                     environment (Board): Information on the environment involved, used purely for the cost functions
+                    human_readable (bool): Indicates whether the output should be in human-readable (string) or machine-readable (tuple) form
             Returns:
                     instructions (list[str, ...]): A list of verbal instructions to produce the "desired" sequence from the "given" sequence
 
@@ -424,48 +425,85 @@ def levenshtein_algo(given, desired, environment):
 
     # print(buildx)
     # print(buildy)
-    for i in range(len(buildx)):
-        if buildx[i] == "Add":
 
-            # Some code to output
-            first_print = ""
-            last_print = ""
-            prev_index = i - 1
-            next_index = i + 1
+    if human_readable:
+        for i in range(len(buildx)):
+            if buildx[i] == "Add":
 
-            while prev_index >= 0 and buildx[prev_index] == 'Add':
-                prev_index -= 1
+                # Some code to output
+                first_print = ""
+                last_print = ""
+                prev_index = i - 1
+                next_index = i + 1
 
-            while next_index < len(buildx) and buildx[next_index] == 'Add':
-                next_index += 1
+                while prev_index >= 0 and buildx[prev_index] == 'Add':
+                    prev_index -= 1
 
-            if prev_index < 0:
-                first_print = "the beginning"
-            else:
-                first_print = buildx[prev_index]
-            
-            if next_index >= len(buildx):
-                last_print = "the end"
-            else:
-                last_print = buildx[next_index]
-            
-            instructions.append(f"Add {str(buildy[i])} between {first_print} and {last_print}")
+                while next_index < len(buildx) and buildx[next_index] == 'Add':
+                    next_index += 1
 
-            # instructions.append(f"Add {str(buildy[i])} at step {i}")
-        elif buildy[i] == "Remove":
-            instructions.append(f"Remove {str(buildx[i])} at step {i}")
-        elif buildx[i] != buildy[i]:
-            instructions.append(f"Swap {buildx[i]} to {buildy[i]}")
+                if prev_index < 0:
+                    first_print = "the beginning"
+                else:
+                    first_print = buildx[prev_index]
+                
+                if next_index >= len(buildx):
+                    last_print = "the end"
+                else:
+                    last_print = buildx[next_index]
+                
+                instructions.append(f"Add {str(buildy[i])} between {first_print} and {last_print}")
+
+                # instructions.append(f"Add {str(buildy[i])} at step {i}")
+            elif buildy[i] == "Remove":
+                instructions.append(f"Remove {str(buildx[i])} at step {i}")
+            elif buildx[i] != buildy[i]:
+                instructions.append(f"Swap {buildx[i]} to {buildy[i]}")
+    else:
+        for i in range(len(buildx)):
+            if buildx[i] == "Add":
+
+                # Some code to output
+                first_print = ""
+                last_print = ""
+                prev_index = i - 1
+                next_index = i + 1
+
+                while prev_index >= 0 and buildx[prev_index] == 'Add':
+                    prev_index -= 1
+
+                while next_index < len(buildx) and buildx[next_index] == 'Add':
+                    next_index += 1
+
+                if prev_index < 0:
+                    first_print = None
+                else:
+                    first_print = buildx[prev_index]
+                
+                if next_index >= len(buildx):
+                    last_print = None
+                else:
+                    last_print = buildx[next_index]
+                
+                instructions.append(("Add", buildy[i], first_print, last_print))
+
+                # instructions.append(f"Add {str(buildy[i])} at step {i}")
+            elif buildy[i] == "Remove":
+                instructions.append(("Remove", buildx[i], None, None))
+            elif buildx[i] != buildy[i]:
+                instructions.append(("Swap", buildx[i], buildy[i], None))
 
     return instructions
 
 
-def suggest_modifications(environment, goal_configuration):
+def suggest_modifications(environment, goal_configuration, human_readable = True):
         """
         Given a goal cable configuration "goal_configuration", suggest the set of moves to produce that configuration given the board's current state.
 
                 Parameter(s):
+                        environment (Board): The board environment of cables that we would like to correct
                         goal_configuration (dict{int:list[(int, int), ...], ...}): The desired configuration of cables for the board
+                        human_readable (bool): Indicates whether the output should be in human-readable (string) or machine-readable (tuple) form
 
                 Returns:
                         instructions (list[str, ...]): A list of verbal instructions to produce the goal configuration from the given board configuration
@@ -481,7 +519,8 @@ def suggest_modifications(environment, goal_configuration):
                     levenshtein_algo(
                         environment.get_cables()[cable_id].get_keypoints(),
                         goal_cable.get_keypoints(),
-                        environment
+                        environment,
+                        human_readable=human_readable
                     )
                 )
             else:
@@ -493,87 +532,127 @@ def suggest_modifications(environment, goal_configuration):
         return instructions
 
 if __name__ == "__main__":
-    import random
+    # Simple example
 
-    board = NewBoard(config_path="../../../data/board_config.json", grid_size=(20,20))
-
+    # Configure board and image object
+    board = NewBoard(config_path="../../../data/board_config.json", grid_size=(20,20)) # grid_size controls granularity, usually square but supports rectangular grid cells
     img = cv2.imread("../../../data/board_setup.png")
 
-    test_cable = Cable([(100, 200), (150, 250), (200, 300), (200, 300)])
-    test_cable = Cable([(600, 200), (900, 400), (1200, 300), (900, 350), (582, 5), (1391, 767)])
-    # board.add_cable(test_cable)
+    # Specify a goal cable (can just be the keypoints, or all points)
+    # Currently hard-coded but can be substituted for an imported cable trace
+    goal_cable = Cable([(701, 84),(829, 177), (974, 256), (890, 578),(1317, 559)], id=-1)
 
-    # ideal_cable = Cable([(653, 634), (701, 84), (890, 578), (829, 177), (1317, 559), (1182, 259), (655, 549), (974, 256), (1283, 88), (1319, 640)], id = -1)
-    feature_coordinates = [(653, 634), (701, 84), (890, 578), (829, 177), (1317, 559), (1182, 259), (655, 549), (974, 256), (1283, 88), (1319, 640)]
+    # Note: id values are arbitrary, but should be distinct to prevent overwriting
+    received_cable = Cable([(701, 84), (974, 256),  (829, 177), (1317, 559)], id=0)
 
-    theoretical_cable = Cable([(701, 84),(829, 177), (974, 256), (890, 578),(1317, 559)], id=-2)
-    # theoretical_cable = Cable([feature_coordinates[random.randint(0, len(feature_coordinates)-1)] for o in range(random.randint(4, 6))], id=-1)
+    # Update the environment/cables accordingly
+    board.add_cable(received_cable)
+    goal_cable.update_keypoints(board)
 
-    sequence = [(701, 84),(829, 177), (974, 256), (890, 578),(1317, 559)]
-    random.shuffle(sequence)
-    ideal_cable = Cable(sequence, id=-1)
+    # Construct a dictionary of ideal cables, with matching IDs to the cables they represent
+    goal_config = {0: goal_cable}
 
-    board.add_cable(theoretical_cable)
-    # board.add_cable(ideal_cable)
+    # Run the correction algorithm and return the results
+    suggestion = suggest_modifications(board, goal_configuration=goal_config, human_readable=False)
+    # Note that human_readable controls the form of the output; when false returns a nested sequence of tuples representing corrections
+    print(suggestion)
+
+    # Examples:
+    '''
+    - ("Add", (1,2), (3,4), (5,6)): Route the cable through (1,2), between when it passes through (3,4) and (5,6)
+    - ("Remove", (1,2), None, None): Disconnect the cable from point (1,2)
+    - ("Swap", (1, 2), (3, 4), None): Disconnect the cable from (1,2) and route it through (3,4) instead
+    '''
+    # All coordinates are in GRID SPACE, so scale them by the assigned grid_size for coordinates in pixel space
+
+
+    # Display the board with the perceived cable on it
+    annotated_img = board.visualize_board(img, quantized=False)
+
+
+    # IGNORE all of my testing below this line - Jaimyn
+
+    # import random
+
+    # board = NewBoard(config_path="../../../data/board_config.json", grid_size=(20,20))
+
+    # img = cv2.imread("../../../data/board_setup.png")
+
+    # test_cable = Cable([(100, 200), (150, 250), (200, 300), (200, 300)])
+    # test_cable = Cable([(600, 200), (900, 400), (1200, 300), (900, 350), (582, 5), (1391, 767)])
+    # # board.add_cable(test_cable)
+
+    # # ideal_cable = Cable([(653, 634), (701, 84), (890, 578), (829, 177), (1317, 559), (1182, 259), (655, 549), (974, 256), (1283, 88), (1319, 640)], id = -1)
+    # feature_coordinates = [(653, 634), (701, 84), (890, 578), (829, 177), (1317, 559), (1182, 259), (655, 549), (974, 256), (1283, 88), (1319, 640)]
+
+    # theoretical_cable = Cable([(701, 84),(829, 177), (974, 256), (890, 578),(1317, 559)], id=-2)
+    # # theoretical_cable = Cable([feature_coordinates[random.randint(0, len(feature_coordinates)-1)] for o in range(random.randint(4, 6))], id=-1)
+
+    # sequence = [(701, 84),(829, 177), (974, 256), (890, 578),(1317, 559)]
+    # random.shuffle(sequence)
+    # ideal_cable = Cable(sequence, id=-1)
+
+    # board.add_cable(theoretical_cable)
+    # # board.add_cable(ideal_cable)
 
 
     
 
-    # Generate fake cables
-    for k in range(1):
-        test = []
-        # first_pos = (random.randint(600, 1350), random.randint(0, 750))
-        # rate = (random.randint(-20, 20), random.randint(-20, 20))
+    # # Generate fake cables
+    # for k in range(1):
+    #     test = []
+    #     # first_pos = (random.randint(600, 1350), random.randint(0, 750))
+    #     # rate = (random.randint(-20, 20), random.randint(-20, 20))
 
-        first_pos = (701, 84)
-        test.append(first_pos)
-        rate = (20, 15)
-        for i in range(random.randint(60, 100)):
-            new_pos = (first_pos[0] + rate[0], first_pos[1] + rate[1])
-            rate = (rate[0] + random.randint(-5, 5), rate[1]+ random.randint(-5, 5))
+    #     first_pos = (701, 84)
+    #     test.append(first_pos)
+    #     rate = (20, 15)
+    #     for i in range(random.randint(60, 100)):
+    #         new_pos = (first_pos[0] + rate[0], first_pos[1] + rate[1])
+    #         rate = (rate[0] + random.randint(-5, 5), rate[1]+ random.randint(-5, 5))
         
-            if (
-                new_pos[0] in range(600, 1350)
-                and new_pos[1] in range(0, 750)
-                # and new_pos not in test
-            ):
-                test.append(new_pos)
-                first_pos = new_pos
+    #         if (
+    #             new_pos[0] in range(600, 1350)
+    #             and new_pos[1] in range(0, 750)
+    #             # and new_pos not in test
+    #         ):
+    #             test.append(new_pos)
+    #             first_pos = new_pos
 
-        test_cable = Cable(test, id=k)
-        board.add_cable(test_cable)
+    #     test_cable = Cable(test, id=k)
+    #     board.add_cable(test_cable)
 
-    #     print(test_cable.get_quantized())
-    #     print(test_cable.get_keypoints())
-    # print(board.key_locations)
+    # #     print(test_cable.get_quantized())
+    # #     print(test_cable.get_keypoints())
+    # # print(board.key_locations)
 
 
-    # Move frequency experiments
-    counts = {"Add": 0, "Swap": 0, "Remove": 0}
-    for w in range(0):
-        random.shuffle(sequence)
-        ideal_cable = Cable(sequence, id=-1)
-        ideal_cable.update_keypoints(board)
+    # # Move frequency experiments
+    # counts = {"Add": 0, "Swap": 0, "Remove": 0}
+    # for w in range(0):
+    #     random.shuffle(sequence)
+    #     ideal_cable = Cable(sequence, id=-1)
+    #     ideal_cable.update_keypoints(board)
 
-        goal_config = {-2: ideal_cable}
-        suggestion = suggest_modifications(board, goal_configuration=goal_config)
-        print(suggestion[0])
-        counts["Add"] += len([idea for idea in suggestion[0] if "Add" in idea])
-        counts["Swap"] += len([idea for idea in suggestion[0] if "Swap" in idea])
-        counts["Remove"] += len([idea for idea in suggestion[0] if "Remove" in idea])
+    #     goal_config = {-2: ideal_cable}
+    #     suggestion = suggest_modifications(board, goal_configuration=goal_config)
+    #     print(suggestion[0])
+    #     counts["Add"] += len([idea for idea in suggestion[0] if "Add" in idea])
+    #     counts["Swap"] += len([idea for idea in suggestion[0] if "Swap" in idea])
+    #     counts["Remove"] += len([idea for idea in suggestion[0] if "Remove" in idea])
 
-    print(counts)
+    # print(counts)
 
-    goal_config = {0: theoretical_cable}
-    suggestion = suggest_modifications(board, goal_configuration=goal_config)
-    print(suggestion)
-    # test2 = [
-    #     (cable1.all_coordinates[random.randint(0, len(cable1.all_coordinates) - 1)])
-    #     for i in range(random.randint(4, 7))
-    # ]
+    # goal_config = {0: theoretical_cable}
+    # suggestion = suggest_modifications(board, goal_configuration=goal_config)
+    # print(suggestion)
+    # # test2 = [
+    # #     (cable1.all_coordinates[random.randint(0, len(cable1.all_coordinates) - 1)])
+    # #     for i in range(random.randint(4, 7))
+    # # ]
 
-    # pretty_matrix(board.return_board())
+    # # pretty_matrix(board.return_board())
 
-    # print(levenshtein_algo(board.get_cables()[0].get_keypoints(), ideal_cable.get_keypoints(), board))
+    # # print(levenshtein_algo(board.get_cables()[0].get_keypoints(), ideal_cable.get_keypoints(), board))
 
-    annotated_img = board.visualize_board(img, quantized=False)
+    # annotated_img = board.visualize_board(img, quantized=False)
