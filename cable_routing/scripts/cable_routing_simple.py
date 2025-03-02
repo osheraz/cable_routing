@@ -11,16 +11,18 @@ def main(args: ExperimentConfig):
     rospy.init_node("integration")
 
     env = ExperimentEnv(args)
+
     board = ExperimentEnv.board
 
-    sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
+    goal_sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
 
     goal_cable = Cable(
-        coordinates=sequence,
+        coordinates=goal_sequence,
         env_keypoints=board.key_locations,
         grid_size=board.grid_size,
         id=-1,
     )
+    board.add_cable(goal_cable)
 
     path = env.update_cable_path()
 
@@ -28,7 +30,7 @@ def main(args: ExperimentConfig):
         coordinates=path,
         env_keypoints=board.key_locations,
         grid_size=board.grid_size,
-        id=-1,
+        id=0,
     )
     board.add_cable(cur_cable)
 

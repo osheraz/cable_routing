@@ -13,7 +13,7 @@ from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
-from cable_routing.env.board.board import Board
+from cable_routing.env.board.new_board import Board
 from cable_routing.env.ext_camera.utils.img_utils import (
     crop_img,
     crop_board,
@@ -23,7 +23,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     find_nearest_point,
     get_perpendicular_ori,
     get_path_angle,
-)  # Split to env_utils, img_utils etc..
+)  # TODO: Split to env_utils, img_utils etc..
 from cable_routing.handloom.handloom_pipeline.tracer import (
     TraceEnd,
 )
@@ -187,6 +187,7 @@ class ExperimentEnv:
 
     def trace_cable(self, img=None, start_points=None, end_points=None, viz=True):
 
+        # TODO: clean implementation
         p1, p2 = self.board.point1, self.board.point2
 
         clips = self.board.get_clips()

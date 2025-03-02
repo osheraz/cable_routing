@@ -90,7 +90,13 @@ class Board:
         """
         TODO: Deprecated, see add_cable
         """
-        self.add_cable(Cable(cable_positions, environment=self))
+        cable = Cable(
+            coordinates=goal_sequence,
+            env_keypoints=board.key_locations,
+            grid_size=board.grid_size,
+            id=np.random.randint(1),
+        )
+        self.add_cable(cable)
         # self.cable_positions = cable_positions
 
     def add_cable(self, cable):
@@ -231,7 +237,7 @@ class Board:
         )
 
     def get_clips(self):
-        return self.key_locations.copy()
+        return self.clip_positions.copy()
 
     def get_cables(self):
         return self.cables.copy()
@@ -323,9 +329,6 @@ if __name__ == "__main__":
 
     board.add_cable(goal_cable)
     board.add_cable(cur_cable)
-
-    goal_cable.update_keypoints(board.key_locations)
-    cur_cable.update_keypoints(board.key_locations)
 
     goal_config = {cur_cable.id: goal_cable}
 
