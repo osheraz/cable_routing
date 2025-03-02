@@ -5,6 +5,16 @@ import numpy as np
 SCALE_FACTOR = 1.0
 
 
+def get_path_angle(path, N=5):
+    """Estimate the cable's direction from the last N points."""
+    if len(path) < N + 1:
+        return None
+
+    delta = np.array(path[-1]) - np.array(path[-N - 1])
+    angle = np.arctan2(delta[1], delta[0])
+    return angle
+
+
 def get_perpendicular_ori(b, a):
     b, a = np.array(b)[:2], np.array(a)[:2]
     tangent = a - b

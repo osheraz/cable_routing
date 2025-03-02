@@ -22,6 +22,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     pick_target_on_path,
     find_nearest_point,
     get_perpendicular_ori,
+    get_path_angle,
 )  # Split to env_utils, img_utils etc..
 from cable_routing.handloom.handloom_pipeline.tracer import (
     TraceEnd,
@@ -222,15 +223,6 @@ class ExperimentEnv:
         print("Tracing status:", status)
 
         if clips is not None:
-
-            def get_path_angle(path, N=5):
-                """Estimate the cable's direction from the last N points."""
-                if len(path) < N + 1:
-                    return None
-
-                delta = np.array(path[-1]) - np.array(path[-N - 1])
-                angle = np.arctan2(delta[1], delta[0])
-                return angle
 
             while status == TraceEnd.CLIP:
                 connection += 1

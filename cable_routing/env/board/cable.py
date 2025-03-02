@@ -62,24 +62,22 @@ class Cable:
                 Returns:
                         None
         """
-        if grid_size != self.grid_size and grid_size:
+        quantized_coords = [
+            (
+                int(round(point[0] / self.grid_size[0])),
+                int(round(point[1] / self.grid_size[1])),
+            )
+            for point in self.true_coordinates
+        ]
 
-            quantized_coords = [
-                (
-                    int(round(point[0] / self.grid_size[0])),
-                    int(round(point[1] / self.grid_size[1])),
-                )
-                for point in self.true_coordinates
-            ]
-
-            if len(quantized_coords) > 0:
-                # Clean up proximal duplicates
-                self.quantized = [quantized_coords[0]]
-                most_recent_coord = quantized_coords[0]
-                for i in range(1, len(quantized_coords)):
-                    if quantized_coords[i] != most_recent_coord:
-                        self.quantized.append(quantized_coords[i])
-                        most_recent_coord = quantized_coords[i]
+        if len(quantized_coords) > 0:
+            # Clean up proximal duplicates
+            self.quantized = [quantized_coords[0]]
+            most_recent_coord = quantized_coords[0]
+            for i in range(1, len(quantized_coords)):
+                if quantized_coords[i] != most_recent_coord:
+                    self.quantized.append(quantized_coords[i])
+                    most_recent_coord = quantized_coords[i]
 
     # Appropriate getter functions
     def get_keypoints(self):

@@ -2,7 +2,7 @@ import numpy as np
 
 
 # Correction algorithm, unclean implementation
-def levenshtein_algo(given, desired, environment):
+def levenshtein_algo(given, desired, environment, human_readable=True):
     """
     Given two sequences of coordinates, "given" and "desired", provide the minimum-cost sequence of additions, removals and swaps to produce "desired" from "given".
 
@@ -10,6 +10,7 @@ def levenshtein_algo(given, desired, environment):
                     given (list[(int, int), ...]): The current sequence of coordinates (usually keypoints) for a given cable
                     desired (list[(int, int), ...]): The desired sequence of coordinates (usually keypoints) for the cable
                     environment (Board): Information on the environment involved, used purely for the cost functions
+                    human_readable (bool): Indicates whether the output should be in human-readable (string) or machine-readable (tuple) form
             Returns:
                     instructions (list[str, ...]): A list of verbal instructions to produce the "desired" sequence from the "given" sequence
 
@@ -90,50 +91,87 @@ def levenshtein_algo(given, desired, environment):
 
     # print(buildx)
     # print(buildy)
-    for i in range(len(buildx)):
-        if buildx[i] == "Add":
 
-            # Some code to output
-            first_print = ""
-            last_print = ""
-            prev_index = i - 1
-            next_index = i + 1
+    if human_readable:
+        for i in range(len(buildx)):
+            if buildx[i] == "Add":
 
-            while prev_index >= 0 and buildx[prev_index] == "Add":
-                prev_index -= 1
+                # Some code to output
+                first_print = ""
+                last_print = ""
+                prev_index = i - 1
+                next_index = i + 1
 
-            while next_index < len(buildx) and buildx[next_index] == "Add":
-                next_index += 1
+                while prev_index >= 0 and buildx[prev_index] == "Add":
+                    prev_index -= 1
 
-            if prev_index < 0:
-                first_print = "the beginning"
-            else:
-                first_print = buildx[prev_index]
+                while next_index < len(buildx) and buildx[next_index] == "Add":
+                    next_index += 1
 
-            if next_index >= len(buildx):
-                last_print = "the end"
-            else:
-                last_print = buildx[next_index]
+                if prev_index < 0:
+                    first_print = "the beginning"
+                else:
+                    first_print = buildx[prev_index]
 
-            instructions.append(
-                f"Add {str(buildy[i])} between {first_print} and {last_print}"
-            )
+                if next_index >= len(buildx):
+                    last_print = "the end"
+                else:
+                    last_print = buildx[next_index]
 
-            # instructions.append(f"Add {str(buildy[i])} at step {i}")
-        elif buildy[i] == "Remove":
-            instructions.append(f"Remove {str(buildx[i])} at step {i}")
-        elif buildx[i] != buildy[i]:
-            instructions.append(f"Swap {buildx[i]} to {buildy[i]}")
+                instructions.append(
+                    f"Add {str(buildy[i])} between {first_print} and {last_print}"
+                )
+
+                # instructions.append(f"Add {str(buildy[i])} at step {i}")
+            elif buildy[i] == "Remove":
+                instructions.append(f"Remove {str(buildx[i])} at step {i}")
+            elif buildx[i] != buildy[i]:
+                instructions.append(f"Swap {buildx[i]} to {buildy[i]}")
+    else:
+        for i in range(len(buildx)):
+            if buildx[i] == "Add":
+
+                # Some code to output
+                first_print = ""
+                last_print = ""
+                prev_index = i - 1
+                next_index = i + 1
+
+                while prev_index >= 0 and buildx[prev_index] == "Add":
+                    prev_index -= 1
+
+                while next_index < len(buildx) and buildx[next_index] == "Add":
+                    next_index += 1
+
+                if prev_index < 0:
+                    first_print = None
+                else:
+                    first_print = buildx[prev_index]
+
+                if next_index >= len(buildx):
+                    last_print = None
+                else:
+                    last_print = buildx[next_index]
+
+                instructions.append(("Add", buildy[i], first_print, last_print))
+
+                # instructions.append(f"Add {str(buildy[i])} at step {i}")
+            elif buildy[i] == "Remove":
+                instructions.append(("Remove", buildx[i], None, None))
+            elif buildx[i] != buildy[i]:
+                instructions.append(("Swap", buildx[i], buildy[i], None))
 
     return instructions
 
 
-def suggest_modifications(environment, goal_configuration):
+def suggest_modifications(environment, goal_configuration, human_readable=True):
     """
     Given a goal cable configuration "goal_configuration", suggest the set of moves to produce that configuration given the board's current state.
 
             Parameter(s):
+                    environment (Board): The board environment of cables that we would like to correct
                     goal_configuration (dict{int:list[(int, int), ...], ...}): The desired configuration of cables for the board
+                    human_readable (bool): Indicates whether the output should be in human-readable (string) or machine-readable (tuple) form
 
             Returns:
                     instructions (list[str, ...]): A list of verbal instructions to produce the goal configuration from the given board configuration
@@ -150,6 +188,7 @@ def suggest_modifications(environment, goal_configuration):
                     environment.get_cables()[cable_id].get_keypoints(),
                     goal_cable.get_keypoints(),
                     environment,
+                    human_readable=human_readable,
                 )
             )
         else:

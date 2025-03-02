@@ -305,59 +305,33 @@ if __name__ == "__main__":
     board = Board(config_path=config_path, grid_size=(20, 20))
     img = cv2.imread(img_path)
 
-    sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
+    goal_sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
+    cur_sequence = [(701, 84), (974, 256), (829, 177), (1317, 559)]
 
-    # random.shuffle(sequence)
-
-    # ideal_cable = Cable(
-    #     coordinates=sequence,
-    #     env_keypoints=board.key_locations,
-    #     grid_size=board.grid_size,
-    #     id=-1,
-    # )
-
-    random.shuffle(sequence)
-    theoretical_cable = Cable(
-        coordinates=sequence,
+    goal_cable = Cable(
+        coordinates=goal_sequence,
+        env_keypoints=board.key_locations,
+        grid_size=board.grid_size,
+        id=-1,
+    )
+    cur_cable = Cable(
+        coordinates=cur_sequence,
         env_keypoints=board.key_locations,
         grid_size=board.grid_size,
         id=0,
     )
-    board.add_cable(theoretical_cable)
-    # Move frequency experiments
-    counts = {"Add": 0, "Swap": 0, "Remove": 0}
 
-    for w in range(1):
+    board.add_cable(goal_cable)
+    board.add_cable(cur_cable)
 
-        ideal_cable = Cable(
-            coordinates=sequence,
-            env_keypoints=board.key_locations,
-            grid_size=board.grid_size,
-            id=-1,
-        )
-        board.add_cable(ideal_cable)
+    goal_cable.update_keypoints(board.key_locations)
+    cur_cable.update_keypoints(board.key_locations)
 
-        goal_config = {0: ideal_cable}
-        suggestion = suggest_modifications(board, goal_configuration=goal_config)
+    goal_config = {cur_cable.id: goal_cable}
 
-        print(suggestion[0])
-        counts["Add"] += len([idea for idea in suggestion[0] if "Add" in idea])
-        counts["Swap"] += len([idea for idea in suggestion[0] if "Swap" in idea])
-        counts["Remove"] += len([idea for idea in suggestion[0] if "Remove" in idea])
-
-    print(counts)
-
-    goal_config = {0: theoretical_cable}
-    suggestion = suggest_modifications(board, goal_configuration=goal_config)
+    suggestion = suggest_modifications(
+        board, goal_configuration=goal_config, human_readable=False
+    )
     print(suggestion)
-
-    # test2 = [
-    #     (cable1.all_coordinates[random.randint(0, len(cable1.all_coordinates) - 1)])
-    #     for i in range(random.randint(4, 7))
-    # ]
-
-    # pretty_matrix(board.return_board())
-
-    # print(levenshtein_algo(board.get_cables()[0].get_keypoints(), ideal_cable.get_keypoints(), board))
 
     annotated_img = board.visualize_board(img, quantized=False)
