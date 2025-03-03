@@ -107,9 +107,9 @@ class Tracer:
             channels=3,
             resnet_type=self.trace_config.resnet_type,
             pretrained=self.trace_config.pretrained,
-        ).cuda()
+        )
         self.trace_model.load_state_dict(
-            torch.load("cable_routing/handloom/models/tracer/tracer_model.pth")
+            torch.load("cable_routing/handloom/models/tracer/tracer_model.pth", map_location=torch.device('cpu')), 
         )  # Uncomment for bajcsy
         augs = []
         augs.append(
@@ -352,7 +352,7 @@ class Tracer:
         cable_mask = np.ones(img.shape[:2])
         cable_mask[img[:, :, 1] < 0.4] = 0
 
-        return self.transform(img.copy()).cuda(), points, cable_mask, angle
+        return self.transform(img.copy()), points, cable_mask, angle
 
     def get_dist_cumsum(self, lst):
         lst_shifted = lst[1:]
