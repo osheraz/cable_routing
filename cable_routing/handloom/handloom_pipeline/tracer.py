@@ -109,7 +109,7 @@ class Tracer:
             pretrained=self.trace_config.pretrained,
         ).cuda()
         self.trace_model.load_state_dict(
-            torch.load("/home/osheraz/handloom/models/tracer/tracer_model.pth")
+            torch.load("cable_routing/handloom/models/tracer/tracer_model.pth")
         )  # Uncomment for bajcsy
         augs = []
         augs.append(
@@ -791,8 +791,11 @@ class AnalyticTracer(Tracer):
         #                                                  start_idx, self.trace_config.cond_point_dist_px,
         #                                                  img.shape, backward=False, randomize_spacing=False)
 
+        print (prev_pixels)
+        print (type(prev_pixels))
+        print(prev_pixels.shape)
         spline, trace_end = simple_uncertain_trace_single.trace(
-            img, prev_pixels, None, exact_path_len=path_len, endpoints=endpoints
+            img, prev_pixels[0], None, exact_path_len=path_len, endpoints=endpoints
         )
         if spline is None:
             spline = prev_pixels
