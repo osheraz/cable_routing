@@ -1,7 +1,7 @@
 import random
 import pprint
 
-class cable_environment:
+class CableEnv:
     '''
     An overarching class that encapsulates the current features and state of a board configuration, as well as relevant algorithms with respect to cable correction.
     '''
@@ -181,7 +181,7 @@ class cable:
                 Parameter(s):
                         coordinates (list[(int,int)...]): A list of the coordinates of our cable board positions
                         id (int), optional: A unique integer identifier for our cable object. Note that multiple instances of a cable can have the same id, if they are intended to represent the same cable (e.g. a present state of the cable and the desired state of that cable)
-                        environment (cable_environment), optional: The environment that the cable is a part of, can be used to update the cable's relevant keypoints
+                        environment (CableEnv), optional: The environment that the cable is a part of, can be used to update the cable's relevant keypoints
 
                 Returns:
                         None
@@ -205,7 +205,7 @@ class cable:
         Update the set of the keypoints for the cable, either using a particular "environment" of choice, or using the environment that was assigned upon instantiation.
 
                 Parameter(s):
-                        environment (cable_environment), optional: The environment we would like to use for updating the cable's keypoints, leave blank if we would like to use the instatiated environment
+                        environment (CableEnv), optional: The environment we would like to use for updating the cable's keypoints, leave blank if we would like to use the instatiated environment
 
                 Returns:
                         None
@@ -244,7 +244,7 @@ class board_feature:
     
 # Testing code
 if __name__ == "__main__":
-    my_environment = cable_environment()
+    my_environment = CableEnv()
     goal_configuration = {}
     for k in range(3):
 
