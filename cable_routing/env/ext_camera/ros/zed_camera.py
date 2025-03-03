@@ -122,6 +122,10 @@ class ZedCameraSubscriber:
 
         return self.rgb_image
 
+    def get_depth(self):
+
+        return self.depth_image
+
     def process_depth_image(self, depth_image):
 
         # depth_image = self.crop_depth_image(depth_image)

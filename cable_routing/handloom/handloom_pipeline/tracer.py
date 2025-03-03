@@ -175,7 +175,7 @@ class Tracer:
         points = points[-num_points:]
         return np.array(points)
 
-    def center_pixels_on_cable(self, image, pixels, display=True):
+    def center_pixels_on_cable(self, image, pixels, display=False):
         # for each pixel, find closest pixel on cable
         image_mask = image[:, :, 0] > 100
         # erode white pixels
@@ -516,22 +516,22 @@ class Tracer:
                             )
 
             # Stoping case 5 : trace went backwards
-            if clips is not None:
-                for clip in clips:
-                    if (abs(global_yx[0] - clip["y"])) < self.ep_buffer * 1.5 and (
-                        abs(global_yx[1] - clip["x"])
-                    ) < self.ep_buffer * 1.5:
+            # if clips is not None:
+            #     for clip in clips:
+            #         if (abs(global_yx[0] - clip["y"])) < self.ep_buffer and (
+            #             abs(global_yx[1] - clip["x"])
+            #         ) < self.ep_buffer:
 
-                        max_sums = find_crossings(image, path)
-                        # TODO: fix - only if the tracing moving backwards
-                        return (
-                            path,
-                            TraceEnd.CLIP,
-                            heatmaps,
-                            crops,
-                            covariances,
-                            max_sums,
-                        )
+            #             max_sums = find_crossings(image, path)
+            #             # TODO: fix - only if the tracing moving backwards
+            #             return (
+            #                 path,
+            #                 TraceEnd.CLIP,
+            #                 heatmaps,
+            #                 crops,
+            #                 covariances,
+            #                 max_sums,
+            #             )
 
             # Stoping case 3 : trace went backwards
             K = 10
@@ -641,7 +641,7 @@ class Tracer:
         endpoints=None,
         path_len=20,
         clips=None,
-        viz=True,
+        viz=False,
         idx=0,
         save_folder="./trace_test",
     ):
@@ -693,7 +693,7 @@ class Tracer:
             endpoints=endpoints,
             model=self.trace_model,
             clips=clips,
-            viz=True,
+            viz=viz,
             idx=idx,
             save_folder=save_folder,
         )
@@ -776,6 +776,7 @@ class AnalyticTracer(Tracer):
         img = np.where(img[:, :, :3] > 100, 255, 0).astype("uint8")
 
         pixels = self.center_pixels_on_cable(img, prev_pixels)
+
         for j in range(len(pixels)):
             cur_pixel = pixels[j][0]
             if (

@@ -27,6 +27,7 @@ class CableTracer:
         save_folder="./trace_test",
         last_path=None,
         idx=1,
+        viz=False,
     ):
 
         img = self.convert_to_handloom_input(img, invert=False)
@@ -39,7 +40,7 @@ class CableTracer:
 
         if last_path is None:
             start_pixels, _ = self.analytic_tracer.trace(
-                img, start_pixels, endpoints=end_points, path_len=3, viz=False, idx=100
+                img, start_pixels, endpoints=end_points, path_len=3, viz=viz, idx=100
             )
         else:
             start_pixels = np.flip(last_path[-4:], axis=1)
@@ -54,12 +55,14 @@ class CableTracer:
             endpoints=end_points,
             path_len=200,
             clips=clips,
-            viz=True,
+            viz=viz,
             idx=idx,
             save_folder=save_folder,
         )
 
         path = np.flip(path, axis=1)
-        cv2.destroyAllWindows()
+
+        if viz:
+            cv2.destroyAllWindows()
 
         return path, status

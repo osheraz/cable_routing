@@ -55,15 +55,23 @@ class ExperimentEnv:
         self.tracer = CableTracer()
 
         ######################################################
-        # self.set_board_region()  # TODO: find a better way..
+        # self.set_board_region()
+        # TODO: find a better way..
         # TODO: add support for this in cfg
         # TODO: modify to Jaimyn code
+        # TODO: move all plots to vis_utils
+        ######################################################
+
         self.board = Board(
             config_path="/home/osheraz/cable_routing/data/board_config.json"
         )
         rospy.logwarn("Env is ready")
 
-        # TODO: cable class
+        self.cable_in_arm = None
+
+    def get_extrinsic(self):
+
+        return self.T_CAM_BASE
 
     def set_board_region(self, img=None):
 
@@ -72,7 +80,7 @@ class ExperimentEnv:
 
         _, self.point1, self.point2 = crop_board(img)
 
-        print(self.point1, self.point2)
+        # print(self.point1, self.point2)
 
     def check_calibration(self):
         """we are going to poke all the clips/plugs etc"""
@@ -92,7 +100,7 @@ class ExperimentEnv:
                 clip_ori = clip["orientation"]
                 pixel_coord = (clip["x"], clip["y"])
                 world_coord = get_world_coord_from_pixel_coord(
-                    pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE
+                    pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE, is_clip=True
                 )
 
                 print(
@@ -126,7 +134,7 @@ class ExperimentEnv:
 
         return world_path
 
-    def goto_cable_node(self, path, display=True):
+    def goto_cable_node(self, path, single_hand=True, display=True):
 
         frame = self.zed_cam.get_rgb()
 
@@ -134,8 +142,13 @@ class ExperimentEnv:
         move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
 
         world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel, self.zed_cam.intrinsic, self.T_CAM_BASE
+            move_to_pixel,
+            self.zed_cam.intrinsic,
+            self.T_CAM_BASE,
+            depth_map=self.zed_cam.get_depth(),
         )
+
+        print("Going to ", world_coord)
 
         path_in_world = self.convert_path_to_world_coord(path)
 
@@ -177,20 +190,77 @@ class ExperimentEnv:
             plt.grid(True)
             plt.show()
 
-        self.robot.single_hand_grasp(
-            world_coord, eef_rot=cable_ori + np.pi / 2, slow_mode=True
+        if single_hand:
+
+            arm = "right" if world_coord[1] < 0 else "left"
+
+            self.robot.single_hand_grasp(
+                arm, world_coord, eef_rot=cable_ori + np.pi / 2, slow_mode=True
+            )
+
+            # should update upon success
+            self.cable_in_arm = arm
+
+    def goto_clip_node(self, side="up", single_hand=True, display=True):
+
+        frame = self.zed_cam.get_rgb()
+
+        move_to_pixel = select_target_point(frame, rule="clip")
+
+        clip = self.board.find_nearest_clip([move_to_pixel])
+
+        clip_ori = clip["orientation"]
+        move_to_pixel = [clip["x"], clip["y"]]
+
+        world_coord = get_world_coord_from_pixel_coord(
+            move_to_pixel,
+            self.zed_cam.intrinsic,
+            self.T_CAM_BASE,
+            # depth_map=self.zed_cam.get_depth(),
+            # is_clip=True,
         )
 
-    def get_extrinsic(self):
+        distance = 0.02
+        offset = {
+            "left": [0, distance, 0],
+            "right": [0, -distance, 0],
+            "down": [-distance, 0, 0],
+            "up": [distance, 0, 0],
+        }[side]
 
-        return self.T_CAM_BASE
+        target_coord = world_coord + np.array(offset)
 
-    def trace_cable(self, img=None, start_points=None, end_points=None, viz=True):
+        path_arr = np.array(
+            self.convert_path_to_world_coord(self.board.cable_positions)
+        )
+
+        if display:
+            plt.figure()
+            plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-")
+            plt.plot(world_coord[0], world_coord[1], "gx", markersize=10)
+            plt.plot(target_coord[0], target_coord[1], "rx", markersize=10)
+            plt.arrow(
+                world_coord[0],
+                world_coord[1],
+                offset[0],
+                offset[1],
+                head_width=0.01,
+                head_length=0.015,
+                fc="r",
+                ec="r",
+            )
+            plt.axis("equal")
+            plt.grid(True)
+            plt.show()
+
+        self.robot.single_hand_move(self.cable_in_arm, target_coord, slow_mode=True)
+
+    def trace_cable(self, img=None, start_points=None, end_points=None, viz=False):
 
         # TODO: clean implementation
         p1, p2 = self.board.point1, self.board.point2
 
-        clips = self.board.get_clips()
+        clips = self.board.get_clips().copy()
         for clip in clips:
             clip["x"] -= p1[0]
             clip["y"] -= p1[1]
@@ -208,7 +278,9 @@ class ExperimentEnv:
         # TODO: fix!
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         save_folder = f"/home/osheraz/cable_routing/trace_test/run_{timestamp}"
-        os.makedirs(save_folder, exist_ok=True)
+        if viz:
+            os.makedirs(save_folder, exist_ok=True)
+
         print(f"Starting trace at start point: {start_points}")
         connection = 0
 
@@ -219,6 +291,7 @@ class ExperimentEnv:
             clips=clips,
             save_folder=save_folder,
             idx=connection,
+            viz=viz,
         )
 
         print("Tracing status:", status)
@@ -303,11 +376,13 @@ class ExperimentEnv:
                     save_folder=save_folder,
                     last_path=path,  # comment to use analytic_tracer
                     idx=connection,
+                    viz=viz,
                 )
 
                 path = np.vstack([path, new_path])
                 print("Tracing status:", status)
 
+        # TODO: find a better way
         path = [(x + p1[0], y + p1[1]) for x, y in path]
 
         return path, status
@@ -316,7 +391,7 @@ class ExperimentEnv:
         self, img=None, start_points=None, end_points=None, viz=True
     ):
         """Traces a cable path from clips by finding valid start points next to them."""
-
+        # TODO: fix bugs
         p1, p2 = self.board.point1, self.board.point2
         clips = self.board.get_clips()
 
@@ -475,142 +550,3 @@ class ExperimentEnv:
         final_path = [(x + p1[0], y + p1[1]) for x, y in final_path]
 
         return final_path, status
-
-    #####################################
-    #####################################
-
-    def get_obs(self):
-
-        obs = {}
-        if self.with_arm:
-            ft = self.arm.robotiq_wrench_filtered_state.tolist()
-            pos, quat = self.arm.get_ee_pose()
-            joints = self.arm.get_joint_values()
-
-            obs.update({"joints": joints, "ee_pose": pos + quat, "ft": ft})
-
-        if self.with_tactile:
-            left, right, bottom = self.tactile.get_frames()
-            obs["frames"] = (left, right, bottom)
-
-        if self.with_depth:
-            img, seg = self.zed.get_frame()
-            obs["img"] = img
-            obs["seg"] = seg
-
-        if self.with_pcl:
-            pcl, sync_rgb, sync_depth, sync_seg, sync_rec_rgb = self.pcl_gen.get_pcl()
-            obs["pcl"] = pcl
-            obs["rgb"] = sync_rec_rgb
-            obs["img"] = sync_depth
-            obs["seg"] = sync_seg
-
-        return obs
-
-    def align_and_grasp(
-        self,
-    ):
-
-        # TODO change align and grasp to dof_relative funcs without moveit
-
-        for i in range(5):
-
-            # ee_pos, ee_quat = self.arm.get_ee_pose()
-            ee_pose = self.arm.move_manipulator.get_cartesian_pose_moveit()
-            ee_pos = [ee_pose.position.x, ee_pose.position.y, ee_pose.position.z]
-            ee_quat = [
-                ee_pose.orientation.x,
-                ee_pose.orientation.y,
-                ee_pose.orientation.z,
-                ee_pose.orientation.w,
-            ]
-            obj_pos = self.tracker.get_obj_pos()
-            obj_pos[-1] += 0.075
-
-            if not np.isnan(np.sum(obj_pos)):
-
-                # added delta_x/delta_y to approximately center the object
-                ee_pos[0] = obj_pos[0] - 0.02
-                ee_pos[1] = obj_pos[1] - 0.01
-                ee_pos[2] = obj_pos[2] - 0.01
-
-                # Orientation is different due to moveit orientation, kinova/orientation ( -0.707,0.707,0,0 ~ 0.707,-0.707,0,0)
-                ee_target = geometry_msgs.msg.Pose()
-                ee_target.orientation.x = ee_quat[0]
-                ee_target.orientation.y = ee_quat[1]
-                ee_target.orientation.z = ee_quat[2]
-                ee_target.orientation.w = ee_quat[3]
-
-                ee_target.position.x = ee_pos[0]
-                ee_target.position.y = ee_pos[1]
-                ee_target.position.z = ee_pos[2]
-                self.arm_movement_result = self.arm.set_ee_pose(ee_target)
-
-                self.grasp()
-
-                return True
-            else:
-                rospy.logerr("Object is undetectable, attempt: " + str(i))
-
-        return False
-
-    def align_and_release(self, init_plug_pose):
-
-        # TODO change align and grasp to dof_relative funcs without moveit
-
-        for i in range(5):
-
-            ee_pose = self.arm.move_manipulator.get_cartesian_pose_moveit()
-            ee_pos = [ee_pose.position.x, ee_pose.position.y, ee_pose.position.z]
-            ee_quat = [
-                ee_pose.orientation.x,
-                ee_pose.orientation.y,
-                ee_pose.orientation.z,
-                ee_pose.orientation.w,
-            ]
-            obj_pos = self.tracker.get_obj_pos()
-            obj_height = 0
-            init_delta_height = 0.03
-
-            if not np.isnan(np.sum(obj_pos)):
-
-                # added delta_x/delta_y to approximately center the object
-                ee_pos[0] = init_plug_pose[0] + (ee_pos[0] - obj_pos[0])
-                ee_pos[1] = init_plug_pose[1] + (ee_pos[1] - obj_pos[1])
-                ee_pos[2] = (
-                    init_plug_pose[2] + obj_pos[2] - obj_height + init_delta_height
-                )
-
-                # Orientation is different due to moveit orientation,
-                # kinova/orientation ( -0.707,0.707,0,0 ~ 0.707,-0.707,0,0)
-
-                ee_target = geometry_msgs.msg.Pose()
-                ee_target.orientation.x = ee_quat[0]
-                ee_target.orientation.y = ee_quat[1]
-                ee_target.orientation.z = ee_quat[2]
-                ee_target.orientation.w = ee_quat[3]
-
-                ee_target.position.x = ee_pos[0]
-                ee_target.position.y = ee_pos[1]
-                ee_target.position.z = ee_pos[2]
-                self.arm_movement_result = self.arm.set_ee_pose(ee_target)
-
-                self.release()
-
-                return True
-            else:
-                rospy.logerr("Object is undetectable, attempt: " + str(i))
-
-        return False
-
-    def get_info_for_control(self):
-        pos, quat = self.arm.get_ee_pose()
-
-        joints = self.arm.get_joint_values()
-        jacob = self.arm.get_jacobian_matrix().tolist()
-
-        return {
-            "joints": joints,
-            "ee_pose": pos + quat,
-            "jacob": jacob,
-        }

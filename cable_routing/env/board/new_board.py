@@ -51,7 +51,7 @@ class Board:
 
         clip_types = {1: "6Pin", 2: "2Pin", 3: "Clip", 4: "Retainer"}
 
-        for clip in self.clip_positions:
+        for clip in self.load_board_config():
             self.add_keypoint(
                 BoardFeature(
                     clip["x"],
@@ -73,7 +73,12 @@ class Board:
 
     def find_nearest_clip(self, path):
 
-        clips = self.get_clips()
+        # TODO: SOMETHING IS MODIFYING GET CLIPS
+        clips = self.load_board_config()  # self.get_clips()
+
+        # for clip in clips:
+        #     clip["x"] -= self.point1[0]
+        #     clip["y"] -= self.point1[1]
 
         last_point = np.array(path[-1])
 
@@ -91,13 +96,13 @@ class Board:
         TODO: Deprecated, see add_cable
         """
         cable = Cable(
-            coordinates=goal_sequence,
-            env_keypoints=board.key_locations,
-            grid_size=board.grid_size,
+            coordinates=cable_positions,
+            env_keypoints=self.key_locations,
+            grid_size=self.grid_size,
             id=np.random.randint(1),
         )
         self.add_cable(cable)
-        # self.cable_positions = cable_positions
+        self.cable_positions = cable_positions
 
     def add_cable(self, cable):
         """

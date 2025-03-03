@@ -1,8 +1,14 @@
 import re
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 SCALE_FACTOR = 1.0
+SAFE_HEIGHT = 0.002
 
 
 def get_path_angle(path, N=5):
@@ -21,7 +27,7 @@ def get_perpendicular_ori(b, a):
     tangent /= np.linalg.norm(tangent)
 
     perp_vec = np.array([-tangent[1], tangent[0]])
-    return np.arctan2(perp_vec[1], perp_vec[0]) + np.pi / 2
+    return np.arctan2(perp_vec[1], perp_vec[0])
 
 
 def find_nearest_point(path, coordinate):
@@ -42,8 +48,96 @@ def pick_target_on_path(img, path):
         return selected_point
 
 
+# def get_world_coord_from_pixel_coord(
+#     pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.8
+# ):
+#     pixel_coord = np.array(pixel_coord, dtype=np.float32)
+
+#     if image_shape and (
+#         cam_intrinsics.width != image_shape[1]
+#         or cam_intrinsics.height != image_shape[0]
+#     ):
+#         scale_x = cam_intrinsics.width / image_shape[1]
+#         scale_y = cam_intrinsics.height / image_shape[0]
+#         pixel_coord[0] *= scale_x
+#         pixel_coord[1] *= scale_y
+
+#     pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
+#     point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * table_depth
+
+#     point_3d_world = (
+#         cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
+#     )
+
+#     return point_3d_world
+
+
+def pixel_to_3d_world(pixel_coord, depth, cam_intrinsics, cam_extrinsics):
+    pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
+    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * depth
+    point_3d_world = (
+        cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
+    )
+    return point_3d_world
+
+
+def plot_neighborhood_in_3d(
+    pixel_coord, depth_map, cam_intrinsics, cam_extrinsics, neighborhood_radius=3
+):
+    x, y = int(pixel_coord[0]), int(pixel_coord[1])
+
+    y_min, y_max = max(0, y - neighborhood_radius), min(
+        depth_map.shape[0], y + neighborhood_radius + 1
+    )
+    x_min, x_max = max(0, x - neighborhood_radius), min(
+        depth_map.shape[1], x + neighborhood_radius + 1
+    )
+
+    focus_region = depth_map[y_min:y_max, x_min:x_max].copy()
+
+    mask = np.zeros_like(focus_region, dtype=np.uint8)
+    cv2.circle(
+        mask, (neighborhood_radius, neighborhood_radius), neighborhood_radius, 1, -1
+    )
+
+    focus_region *= mask
+
+    ys, xs = np.where(mask > 0)
+    xs = xs + x_min
+    ys = ys + y_min
+
+    points_3d = []
+    for px, py in zip(xs, ys):
+        d = depth_map[py, px]
+        if d > 0:
+            point_3d = pixel_to_3d_world((px, py), d, cam_intrinsics, cam_extrinsics)
+            points_3d.append(point_3d)
+
+    points_3d = np.array(points_3d)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    sc = ax.scatter(
+        points_3d[:, 0], points_3d[:, 1], points_3d[:, 2], c=points_3d[:, 2], cmap="jet"
+    )
+    plt.colorbar(sc, label="Z (meters)")
+    ax.set_xlabel("X (meters)")
+    ax.set_ylabel("Y (meters)")
+    ax.set_zlabel("Z (meters)")
+    ax.set_title(f"3D Points around ({x}, {y})")
+    plt.show()
+
+
 def get_world_coord_from_pixel_coord(
-    pixel_coord, cam_intrinsics, cam_extrinsics, image_shape=None, table_depth=0.8
+    pixel_coord,
+    cam_intrinsics,
+    cam_extrinsics,
+    image_shape=None,
+    table_depth=0.835,
+    depth_map=None,
+    neighborhood_radius=10,
+    display=True,
+    is_clip=False,
 ):
     pixel_coord = np.array(pixel_coord, dtype=np.float32)
 
@@ -56,14 +150,49 @@ def get_world_coord_from_pixel_coord(
         pixel_coord[0] *= scale_x
         pixel_coord[1] *= scale_y
 
-    pixel_homogeneous = np.array([pixel_coord[0], pixel_coord[1], 1.0])
-    point_3d_cam = np.linalg.inv(cam_intrinsics._K).dot(pixel_homogeneous) * table_depth
+    if is_clip:
+        depth = 0.8
+    else:
+        if depth_map is not None:
+            x, y = int(pixel_coord[0]), int(pixel_coord[1])
 
-    point_3d_world = (
-        cam_extrinsics.rotation.dot(point_3d_cam) + cam_extrinsics.translation
-    )
+            y_min, y_max = max(0, y - neighborhood_radius), min(
+                depth_map.shape[0], y + neighborhood_radius + 1
+            )
+            x_min, x_max = max(0, x - neighborhood_radius), min(
+                depth_map.shape[1], x + neighborhood_radius + 1
+            )
 
-    return point_3d_world
+            focus_region = depth_map[y_min:y_max, x_min:x_max].copy()
+
+            mask = np.zeros_like(focus_region, dtype=np.uint8)
+            cv2.circle(
+                mask,
+                (neighborhood_radius, neighborhood_radius),
+                neighborhood_radius,
+                1,
+                -1,
+            )
+
+            focus_region *= mask
+            valid_depths = focus_region[focus_region > 0]
+            depth = np.min(valid_depths) if valid_depths.size > 0 else table_depth
+
+            if display:
+                plot_neighborhood_in_3d(
+                    pixel_coord,
+                    depth_map,
+                    cam_intrinsics,
+                    cam_extrinsics,
+                    neighborhood_radius,
+                )
+
+        else:
+            depth = table_depth
+
+        depth = min(depth, table_depth)
+
+    return pixel_to_3d_world(pixel_coord, depth, cam_intrinsics, cam_extrinsics)
 
 
 def crop_board(img):

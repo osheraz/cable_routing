@@ -1,14 +1,11 @@
 import rospy
 import numpy as np
 import cv2
-from autolab_core import RigidTransform, Point
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 import tyro
-from autolab_core import RigidTransform, Point, CameraIntrinsics
+from autolab_core import RigidTransform, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
-
-from cable_routing.env.ext_camera.ros.utils.image_utils import image_msg_to_numpy
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
 from cable_routing.env.ext_camera.utils.img_utils import (
@@ -71,11 +68,12 @@ def main(args: ExperimentConfig):
         return
 
     world_coord = get_world_coord_from_pixel_coord(
-        pixel_coord, CAM_INTR, T_CAM_BASE  # , board_rect
+        pixel_coord, CAM_INTR, T_CAM_BASE, depth_map=zed_cam.get_depth()
     )
 
     print("World Coordinate: ", world_coord)
 
+    # input("Press Enter to apply...")
     yumi.single_hand_grasp(world_coord, eef_rot=np.pi / 2, slow_mode=True)
 
     # yumi.dual_hand_grasp(

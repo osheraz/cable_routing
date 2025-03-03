@@ -251,14 +251,16 @@ class YuMiRobotEnv:
         pass
 
     def single_hand_grasp(
-        self, world_coord: np.ndarray, eef_rot: float = np.pi, slow_mode: bool = True
+        self,
+        arm: Literal["left", "right"],
+        world_coord: np.ndarray,
+        eef_rot: float = np.pi,
+        slow_mode: bool = True,
     ) -> None:
         """ """
 
-        arm = "right" if world_coord[1] < 0 else "left"
-
+        self.open_grippers(arm)
         print(f"Moving {arm} arm to the target position.")
-
         # Move above the target
         rot = RigidTransform.x_axis_rotation(np.pi) @ RigidTransform.z_axis_rotation(
             eef_rot
@@ -295,6 +297,54 @@ class YuMiRobotEnv:
         )
 
         print(f"{arm.capitalize()} arm grasp completed.")
+
+    def single_hand_move(
+        self,
+        arm: Literal["left", "right"],
+        world_coord: np.ndarray,
+        eef_rot: float = np.pi,
+        slow_mode: bool = True,
+    ) -> None:
+        """ """
+
+        print(f"Moving {arm} arm to the target position.")
+
+        current_arm = self.get_ee_pose()[0 if arm == "left" else 1]
+
+        target_pose = RigidTransform(
+            rotation=current_arm.rotation, translation=world_coord
+        )
+
+        # xy first, then z
+        target_pose.translation[2] = current_arm.translation[2]
+        self.set_ee_pose(
+            left_pose=target_pose if arm == "left" else None,
+            right_pose=target_pose if arm == "right" else None,
+        )
+
+        # TODO wrap this function
+        original_speed = self.interface._async_interface.speed
+        if slow_mode:
+            self.interface.yumi.set_speed(original_speed * 0.1)
+
+        target_pose.translation[2] = world_coord[2]
+        self.set_ee_pose(
+            left_pose=target_pose if arm == "left" else None,
+            right_pose=target_pose if arm == "right" else None,
+        )
+
+        # Close gripper to grasp the object
+        self.open_grippers(side=arm)
+        self.interface.yumi.set_speed(original_speed)
+
+        # up a
+        target_pose.translation[2] += 0.05
+        self.set_ee_pose(
+            left_pose=target_pose if arm == "left" else None,
+            right_pose=target_pose if arm == "right" else None,
+        )
+
+        print(f"{arm.capitalize()} arm move completed.")
 
     def dual_hand_grasp(
         self,

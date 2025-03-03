@@ -18,7 +18,7 @@ class ClipPlacementGUI:
         self.current_orientation = 0
         self.current_clip_type = 1
         self.preview_position = None
-        self.clip_types = {1: "6Pin", 2: "2Pin", 3: "Clip", 4: "Retainer"}
+        self.clip_types = {1: "6Pin", 2: "2Pin", 3: "C-Clip", 4: "Plug"}
         self.config_path = "/home/osheraz/cable_routing/data/board_config.json"
         self.annotated_img_path = "/home/osheraz/cable_routing/data/board_setup.png"
 
@@ -117,7 +117,7 @@ class ClipPlacementGUI:
         cv2.arrowedLine(img, arrow_start, arrow_end, (255, 0, 0), 2)
         cv2.putText(
             img,
-            self.clip_types[clip_type],
+            self.clip_types[clip_type] + str([x, y]),
             (x + 15, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
