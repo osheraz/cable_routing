@@ -1,21 +1,13 @@
-import rospy
 import numpy as np
 import cv2
-from sympy import im
-from tqdm import tqdm
-from cable_routing.env.robots.yumi import YuMiRobotEnv
-import tyro
 import matplotlib.pyplot as plt
 import numpy as np
 import datetime
 import os
-import math
+from cable_routing.configs.envconfig import ExperimentConfig
 from autolab_core import RigidTransform, Point, CameraIntrinsics
-from cable_routing.configs.envconfig import ExperimentConfig, ZedMiniConfig
-from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
-from cable_routing.env.board.new_board import Board
-from cable_routing.algo.astar import AStarPlanner
+from cable_routing.env.board.board import Board
 from cable_routing.env.ext_camera.utils.img_utils import (
     crop_img,
     crop_board,
@@ -24,54 +16,35 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     pick_target_on_path,
     find_nearest_point,
     get_perpendicular_ori,
-    get_path_angle,
-)  # TODO: Split to env_utils, img_utils etc..
+)  # Split to env_utils, img_utils etc..
 from cable_routing.handloom.handloom_pipeline.tracer import (
     TraceEnd,
 )
 
 
-class ExperimentEnv:
+class DummyExperimentEnv:
     """Superclass for all Robots environments."""
 
     def __init__(
         self,
-        exp_config: ExperimentConfig,
     ):
 
-        rospy.logwarn("Setting up the environment")
-        self.exp_config = exp_config
-        self.robot = YuMiRobotEnv(exp_config.robot_cfg)
-        rospy.sleep(2)
-
         # todo: add cfg support for this
-        self.zed_cam = ZedCameraSubscriber()
-        while self.zed_cam.rgb_image is None or self.zed_cam.depth_image is None:
-            rospy.sleep(0.1)
-            rospy.loginfo("Waiting for images from ZED camera...")
-
         self.T_CAM_BASE = RigidTransform.load(
-            exp_config.cam_to_robot_trans_path
+            "data/zed/zed_to_world.tf"
         ).as_frames(from_frame="zed", to_frame="base_link")
 
         self.tracer = CableTracer()
 
         ######################################################
-        # self.set_board_region()
-        # TODO: find a better way..
+        # self.set_board_region()  # TODO: find a better way..
         # TODO: add support for this in cfg
         # TODO: modify to Jaimyn code
-        # TODO: move all plots to vis_utils
-        ######################################################
+        self.board = Board(
+            config_path="data/board_config.json"
+        )
 
-        self.board = Board(config_path=exp_config.board_cfg_path)
-        rospy.logwarn("Env is ready")
-
-        self.cable_in_arm = None
-
-    def get_extrinsic(self):
-
-        return self.T_CAM_BASE
+        # TODO: cable class
 
     def set_board_region(self, img=None):
 
@@ -80,40 +53,7 @@ class ExperimentEnv:
 
         _, self.point1, self.point2 = crop_board(img)
 
-        # print(self.point1, self.point2)
-
-    def check_calibration(self):
-        """we are going to poke all the clips/plugs etc"""
-
-        # TODO - above board
-        self.robot.move_to_home()
-
-        self.board.visualize_board(self.zed_cam.rgb_image)
-
-        clips = self.board.get_clips()
-
-        abort = False
-        for clip in clips:
-
-            if not abort:
-                clip_type = clip["type"]
-                clip_ori = clip["orientation"]
-                pixel_coord = (clip["x"], clip["y"])
-                world_coord = get_world_coord_from_pixel_coord(
-                    pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE, is_clip=True
-                )
-
-                print(
-                    f"Poking clip {clip_type}, orientation: {clip_ori} at: {world_coord}"
-                )
-
-                # TODO add support for ori
-                self.robot.single_hand_grasp(
-                    world_coord, eef_rot=np.deg2rad(clip_ori), slow_mode=True
-                )
-                self.robot.move_to_home()
-
-                # abort = input("Abort? (y/n): ") == "y"
+        print(f'Setting board region {self.point1, self.point2}')
 
     def update_cable_path(self, start_points=None, end_points=None):
 
@@ -134,228 +74,15 @@ class ExperimentEnv:
 
         return world_path
 
-    def goto_cable_node(self, path, single_hand=True, display=True):
+    def get_extrinsic(self):
 
-        frame = self.zed_cam.get_rgb()
+        return self.T_CAM_BASE
 
-        move_to_pixel = pick_target_on_path(frame, path)
-        move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
+    def trace_cable(self, img=None, start_points=None, end_points=None, viz=True):
 
-        world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel,
-            self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
-            depth_map=self.zed_cam.get_depth(),
-        )
-
-        print("Going to ", world_coord)
-
-        path_in_world = self.convert_path_to_world_coord(path)
-
-        cable_ori = get_perpendicular_ori(
-            path_in_world[idx - 1], path_in_world[idx + 1]
-        )
-        path_arr = np.array(path_in_world)
-
-        if display:
-            plt.figure()
-            plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-", label="Cable Path")
-            plt.plot(
-                world_coord[0],
-                world_coord[1],
-                "rx",
-                markersize=10,
-                label="Grasp Target",
-            )
-
-            b = np.array(path_in_world[idx - 1])[:2]
-            a = np.array(path_in_world[idx + 1])[:2]
-            mid = (b + a) / 2
-
-            perp_vec = np.array([np.cos(cable_ori), np.sin(cable_ori)]) * 0.02
-
-            plt.plot(
-                [mid[0] - perp_vec[0], mid[0] + perp_vec[0]],
-                [mid[1] - perp_vec[1], mid[1] + perp_vec[1]],
-                "r-",
-                linewidth=2,
-                label="Perpendicular Orientation",
-            )
-
-            plt.xlabel("X")
-            plt.ylabel("Y")
-            plt.title("Cable Path and Grasp Orientation")
-            plt.legend()
-            plt.axis("equal")
-            plt.grid(True)
-            plt.show()
-
-        if single_hand:
-
-            arm = "right" if world_coord[1] < 0 else "left"
-
-            self.robot.single_hand_grasp(
-                arm, world_coord, eef_rot=cable_ori + np.pi / 2, slow_mode=True
-            )
-
-            # should update upon success
-            self.cable_in_arm = arm
-
-    def goto_clip_node(self, side="up", single_hand=True, display=True):
-
-        frame = self.zed_cam.get_rgb()
-
-        move_to_pixel = select_target_point(frame, rule="clip")
-
-        clip = self.board.find_nearest_clip([move_to_pixel])
-
-        clip_ori = clip["orientation"]
-        move_to_pixel = [clip["x"], clip["y"]]
-
-        world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel,
-            self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
-            # depth_map=self.zed_cam.get_depth(),
-            # is_clip=True,
-        )
-
-        distance = 0.02
-        offset = {
-            "left": [0, distance, 0],
-            "right": [0, -distance, 0],
-            "down": [-distance, 0, 0],
-            "up": [distance, 0, 0],
-        }[side]
-
-        target_coord = world_coord + np.array(offset)
-
-        path_arr = np.array(
-            self.convert_path_to_world_coord(self.board.cable_positions)
-        )
-
-        if display:
-            plt.figure()
-            plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-")
-            plt.plot(world_coord[0], world_coord[1], "gx", markersize=10)
-            plt.plot(target_coord[0], target_coord[1], "rx", markersize=10)
-            plt.arrow(
-                world_coord[0],
-                world_coord[1],
-                offset[0],
-                offset[1],
-                head_width=0.01,
-                head_length=0.015,
-                fc="r",
-                ec="r",
-            )
-            plt.axis("equal")
-            plt.grid(True)
-            plt.show()
-
-        self.robot.single_hand_move(self.cable_in_arm, target_coord, slow_mode=True)
-
-    def slideto_cable_node(
-        self, side="up", single_hand=True, display=True, num_waypoints=5
-    ):
-        frame = self.zed_cam.get_rgb()
-
-        move_to_pixel = select_target_point(frame, rule="clip")
-        clip = self.board.find_nearest_clip([move_to_pixel])
-        move_to_pixel = [clip["x"], clip["y"]]
-
-        world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel,
-            self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
-            is_clip=True,
-        )
-
-        offset = {
-            "left": [0, 0.02, 0],
-            "right": [0, -0.02, 0],
-            "down": [-0.02, 0, 0],
-            "up": [0.02, 0, 0],
-        }[side]
-
-        target_coord = world_coord + np.array(offset)
-
-        current_pose = self.robot.get_ee_pose()[0 if self.cable_in_arm == "left" else 1]
-
-        target_coord[2] = current_pose.translation[2]
-
-        waypoints = np.linspace(current_pose.translation, target_coord, num_waypoints)
-
-        if display:
-            path_arr = np.array(
-                self.convert_path_to_world_coord(self.board.cable_positions)
-            )
-
-            plt.figure(figsize=(8, 6))
-            plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-", label="Cable Path")
-            plt.plot(
-                world_coord[0],
-                world_coord[1],
-                "gx",
-                markersize=10,
-                label="Clip Location",
-            )
-            plt.plot(
-                target_coord[0],
-                target_coord[1],
-                "rx",
-                markersize=10,
-                label="Target Point",
-            )
-
-            for i, waypoint in enumerate(waypoints):
-                plt.plot(waypoint[0], waypoint[1], "ko", markersize=5)
-                if i > 0:
-                    plt.plot(
-                        [waypoints[i - 1][0], waypoint[0]],
-                        [waypoints[i - 1][1], waypoint[1]],
-                        "k--",
-                    )
-
-            plt.arrow(
-                world_coord[0],
-                world_coord[1],
-                offset[0],
-                offset[1],
-                head_width=0.01,
-                head_length=0.015,
-                fc="r",
-                ec="r",
-                label="Approach Direction",
-            )
-
-            plt.xlabel("X (meters)")
-            plt.ylabel("Y (meters)")
-            plt.legend()
-            plt.axis("equal")
-            plt.grid(True)
-            plt.title(f"Sliding to Clip (Approach: {side})")
-            plt.show()
-
-        # Open the gripper a bit
-        cur_gripper_pos = self.robot.get_gripper_pose(self.cable_in_arm)
-        self.robot.grippers_move_to(
-            self.cable_in_arm, distance=cur_gripper_pos + self.robot.gripper_opening
-        )
-
-        poses = [
-            RigidTransform(translation=waypoint, rotation=current_pose.rotation)
-            for waypoint in [waypoints[0], waypoints[-1]]  # fix
-        ]
-
-        self.robot.plan_and_execute_linear_waypoints(self.cable_in_arm, waypoints=poses)
-
-    def trace_cable(self, img=None, start_points=None, end_points=None, viz=False):
-
-        # TODO: clean implementation
         p1, p2 = self.board.point1, self.board.point2
 
-        clips = self.board.get_clips().copy()
+        clips = self.board.get_clips()
         for clip in clips:
             clip["x"] -= p1[0]
             clip["y"] -= p1[1]
@@ -372,10 +99,8 @@ class ExperimentEnv:
 
         # TODO: fix!
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_folder = f"{self.exp_config.save_folder}/run_{timestamp}"
-        if viz:
-            os.makedirs(save_folder, exist_ok=True)
-
+        save_folder = f"./cable_routing/trace_test/run_{timestamp}"
+        os.makedirs(save_folder, exist_ok=True)
         print(f"Starting trace at start point: {start_points}")
         connection = 0
 
@@ -386,12 +111,20 @@ class ExperimentEnv:
             clips=clips,
             save_folder=save_folder,
             idx=connection,
-            viz=viz,
         )
 
         print("Tracing status:", status)
 
         if clips is not None:
+
+            def get_path_angle(path, N=5):
+                """Estimate the cable's direction from the last N points."""
+                if len(path) < N + 1:
+                    return None
+
+                delta = np.array(path[-1]) - np.array(path[-N - 1])
+                angle = np.arctan2(delta[1], delta[0])
+                return angle
 
             while status == TraceEnd.CLIP:
                 connection += 1
@@ -471,29 +204,20 @@ class ExperimentEnv:
                     save_folder=save_folder,
                     last_path=path,  # comment to use analytic_tracer
                     idx=connection,
-                    viz=viz,
                 )
 
                 path = np.vstack([path, new_path])
                 print("Tracing status:", status)
 
-        # TODO: find a better way
         path = [(x + p1[0], y + p1[1]) for x, y in path]
 
         return path, status
-
-    def trace_cable_with_clips(self, img=None):
-        """
-        Kavish implementation of tracing with clips by finding start
-        points next to them
-        """
-
 
     def trace_cable_from_clips(
         self, img=None, start_points=None, end_points=None, viz=True
     ):
         """Traces a cable path from clips by finding valid start points next to them."""
-        # TODO: fix bugs NOT WORKING
+
         p1, p2 = self.board.point1, self.board.point2
         clips = self.board.get_clips()
 
@@ -502,7 +226,8 @@ class ExperimentEnv:
             clip["y"] -= p1[1]
 
         if img is None:
-            img = self.zed_cam.rgb_image
+            # img = self.zed_cam.rgb_image
+            raise ValueError('Image cannot be none, must pass in an image when using DummyExperimentEnv')
 
         img = crop_img(img, p1, p2)
 
@@ -510,7 +235,7 @@ class ExperimentEnv:
             end_points = select_target_point(img, rule="end")
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_folder = f"{self.exp_config.save_folder}/run_{timestamp}"
+        save_folder = f"./cable_routing/trace_test/run_{timestamp}"
         os.makedirs(save_folder, exist_ok=True)
 
         def mask_clip_region(image, clip, mask_size=30):
@@ -532,7 +257,7 @@ class ExperimentEnv:
 
         def center_pixels_on_cable(image, pixels, display=True):
             # for each pixel, find closest pixel on cable
-            image_mask = image[:, :, 0] > 100
+            image_mask = image[:, :, 0] > 100 #brightness threshold
             # erode white pixels
             kernel = np.ones((2, 2), np.uint8)
             image_mask = cv2.erode(image_mask.astype(np.uint8), kernel, iterations=1)
@@ -652,3 +377,6 @@ class ExperimentEnv:
         final_path = [(x + p1[0], y + p1[1]) for x, y in final_path]
 
         return final_path, status
+
+    #####################################
+    #####################################

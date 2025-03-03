@@ -107,9 +107,9 @@ class Tracer:
             channels=3,
             resnet_type=self.trace_config.resnet_type,
             pretrained=self.trace_config.pretrained,
-        ).cuda()
+        )
         self.trace_model.load_state_dict(
-            torch.load("/home/osheraz/handloom/models/tracer/tracer_model.pth")
+            torch.load("cable_routing/handloom/models/tracer/tracer_model.pth", map_location=torch.device('cpu')), 
         )  # Uncomment for bajcsy
         augs = []
         augs.append(
@@ -352,7 +352,7 @@ class Tracer:
         cable_mask = np.ones(img.shape[:2])
         cable_mask[img[:, :, 1] < 0.4] = 0
 
-        return self.transform(img.copy()).cuda(), points, cable_mask, angle
+        return self.transform(img.copy()), points, cable_mask, angle
 
     def get_dist_cumsum(self, lst):
         lst_shifted = lst[1:]
@@ -792,8 +792,11 @@ class AnalyticTracer(Tracer):
         #                                                  start_idx, self.trace_config.cond_point_dist_px,
         #                                                  img.shape, backward=False, randomize_spacing=False)
 
+        print (prev_pixels)
+        print (type(prev_pixels))
+        print(prev_pixels.shape)
         spline, trace_end = simple_uncertain_trace_single.trace(
-            img, prev_pixels, None, exact_path_len=path_len, endpoints=endpoints
+            img, prev_pixels[0], None, exact_path_len=path_len, endpoints=endpoints
         )
         if spline is None:
             spline = prev_pixels
