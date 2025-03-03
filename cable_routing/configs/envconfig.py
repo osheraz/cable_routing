@@ -107,7 +107,9 @@ class ExperimentConfig:
     board_cfg_path: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "board/board_config.json"
     )
-
+    bg_img_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "board/board_setup.png"
+    )
     save_folder: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "../trace_test"
     )

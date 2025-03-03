@@ -1,6 +1,7 @@
 import rospy
 import numpy as np
 import cv2
+from sympy import im
 from tqdm import tqdm
 from cable_routing.env.robots.yumi import YuMiRobotEnv
 import tyro
@@ -14,6 +15,7 @@ from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
 from cable_routing.env.board.new_board import Board
+from cable_routing.algo.astar import AStarPlanner
 from cable_routing.env.ext_camera.utils.img_utils import (
     crop_img,
     crop_board,

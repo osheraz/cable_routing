@@ -6,6 +6,7 @@ import random
 
 from cable_routing.env.board.cable import Cable
 from cable_routing.algo.levenshtein import suggest_modifications
+from cable_routing.configs.envconfig import ExperimentConfig
 
 
 def pretty_matrix(matrix):
@@ -17,7 +18,13 @@ def pretty_matrix(matrix):
 
 
 class Board:
-    def __init__(self, config_path, width=1500, height=800, grid_size=(100, 100)):
+    def __init__(
+        self,
+        config_path="/home/osheraz/cable_routing/cable_routing/configs/board/board_config.json",
+        width=1500,
+        height=800,
+        grid_size=(100, 100),
+    ):
         """
         Initialize a default instance of our board environment.
 
@@ -309,9 +316,9 @@ class BoardFeature:
 
 if __name__ == "__main__":
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(current_dir, "../../../data/board_config.json")
-    img_path = os.path.join(current_dir, "../../../data/board_setup.png")
+    cfg = ExperimentConfig
+    config_path = cfg.board_cfg_path
+    img_path = cfg.bg_img_path
 
     board = Board(config_path=config_path, grid_size=(20, 20))
     img = cv2.imread(img_path)
@@ -338,7 +345,7 @@ if __name__ == "__main__":
     goal_config = {cur_cable.id: goal_cable}
 
     suggestion = suggest_modifications(
-        board, goal_configuration=goal_config, human_readable=False
+        board, goal_configuration=goal_config, human_readable=True
     )
     print(suggestion)
 
