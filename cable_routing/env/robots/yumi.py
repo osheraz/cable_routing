@@ -16,7 +16,7 @@ class YuMiRobotEnv:
         self.interface = Interface(speed=0.2)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
-
+        self.gripper_opening = 5
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
@@ -114,22 +114,44 @@ class YuMiRobotEnv:
     def plan_and_execute_linear_waypoints(
         self,
         arms: Literal["left", "right", "both"],
-        start_pose_l: Optional[RigidTransform] = None,
-        end_pose_l: Optional[RigidTransform] = None,
-        start_pose_r: Optional[RigidTransform] = None,
-        end_pose_r: Optional[RigidTransform] = None,
+        waypoints: Union[
+            List[RigidTransform],  # Single arm (left or right)
+            Tuple[List[RigidTransform], List[RigidTransform]],  # Both arms
+        ],
     ) -> None:
+        l_targets = []
+        r_targets = []
 
-        # Plan the trajectory
+        if arms == "left":
+            if not isinstance(waypoints, list):
+                raise ValueError(
+                    "For left arm, waypoints must be a single list of RigidTransforms"
+                )
+            l_targets = waypoints
+
+        elif arms == "right":
+            if not isinstance(waypoints, list):
+                raise ValueError(
+                    "For right arm, waypoints must be a single list of RigidTransforms"
+                )
+            r_targets = waypoints
+
+        elif arms == "both":
+            if not isinstance(waypoints, tuple) or len(waypoints) != 2:
+                raise ValueError(
+                    "For both arms, waypoints must be a tuple: (left_waypoints, right_waypoints)"
+                )
+            l_targets, r_targets = waypoints
+
+        # Plan and execute trajectory
         trajectories = self.interface.plan_linear_waypoints(
-            l_targets=[start_pose_l, end_pose_l] if arms in ["left", "both"] else [],
-            r_targets=[start_pose_r, end_pose_r] if arms in ["right", "both"] else [],
+            l_targets=l_targets,
+            r_targets=r_targets,
         )
 
-        # Execute the planned trajectory
         self.interface.run_trajectory(
-            l_trajectory=trajectories[0] if arms in ["left", "both"] else None,
-            r_trajectory=trajectories[1] if arms in ["right", "both"] else None,
+            l_trajectory=trajectories[0] if l_targets else None,
+            r_trajectory=trajectories[1] if r_targets else None,
         )
 
     def set_joint_positions(

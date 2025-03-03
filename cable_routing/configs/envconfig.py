@@ -1,10 +1,10 @@
-from tkinter import LEFT, RIGHT
 from typing import Literal, Optional, Tuple, Union
 import pathlib
 import tyro
 import dataclasses
 from autolab_core import RigidTransform, Point
 import numpy as np
+import os
 
 
 @dataclasses.dataclass(frozen=True)
@@ -96,9 +96,21 @@ class ZedMiniConfig:
 
 @dataclasses.dataclass
 class ExperimentConfig:
+
     camera_cfg: BrioConfig
     robot_cfg: YuMiConfig
     board_cfg: EnvConfig
+
+    cam_to_robot_trans_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world.tf"
+    )
+    board_cfg_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "board/board_config.json"
+    )
+
+    save_folder: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "../trace_test"
+    )
 
 
 if __name__ == "__main__":
