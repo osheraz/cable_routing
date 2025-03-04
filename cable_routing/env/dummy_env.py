@@ -31,7 +31,7 @@ class DummyExperimentEnv:
 
         # todo: add cfg support for this
         self.T_CAM_BASE = RigidTransform.load(
-            "data/zed/zed_to_world.tf"
+            "cable_routing/configs/cameras/zed_to_world.tf"
         ).as_frames(from_frame="zed", to_frame="base_link")
 
         self.tracer = CableTracer()
@@ -79,7 +79,6 @@ class DummyExperimentEnv:
         return self.T_CAM_BASE
 
     def trace_cable(self, img=None, start_points=None, end_points=None, viz=True):
-
         p1, p2 = self.board.point1, self.board.point2
 
         clips = self.board.get_clips()
