@@ -256,17 +256,23 @@ class AStarPlanner:
         return motion
 
 
-import os
-import cv2
-import numpy as np
-import matplotlib.pyplot as plt
-from cable_routing.env.board.new_board import Board
-from cable_routing.env.ext_camera.utils.img_utils import select_target_point
-from cable_routing.configs.envconfig import ExperimentConfig
-
-
 def main():
     print(__file__ + " start!!")
+
+    def random_coordinate(bottom_vertex, top_vertex):
+        """
+        Generate random (x, y) coordinate within the 20x20 grid boundary.
+        """
+        x = np.random.randint(bottom_vertex[0] + 1, top_vertex[0])
+        y = np.random.randint(bottom_vertex[1] + 1, top_vertex[1])
+        return [x, y]
+
+    # simple test
+    import cv2
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from cable_routing.env.board.new_board import Board
+    from cable_routing.configs.envconfig import ExperimentConfig
 
     # === 1. Load Board and Clips ===
     cfg = ExperimentConfig
@@ -295,10 +301,11 @@ def main():
     ox, oy = [], []
     for clip in clips:
         # Shift so (0,0) = top-left corner of the board
+        # cuz everything in camera frame - TODO :fix
         clip["x"] -= board_coordiante[0]
         clip["y"] -= board_coordiante[1]
 
-        # Scale to fit into 20x20 grid
+        # Scale to fit into grid
         clip["x"] *= scale_x
         clip["y"] *= scale_y
 
@@ -306,15 +313,15 @@ def main():
         oy.append(clip["y"])
 
     # === 3. Add Outer Boundary (Board Edges) to Obstacles ===
-    for x in range(21):  # Along x-axis (0 to 20)
+    for x in range(top_vertex[0] + 1):  # Along x-axis (0 to 20)
         ox.append(x)
         oy.append(0)
         ox.append(x)
-        oy.append(20)
-    for y in range(21):  # Along y-axis (0 to 20)
+        oy.append(top_vertex[0])
+    for y in range(top_vertex[1] + 1):  # Along y-axis (0 to 20)
         ox.append(0)
         oy.append(y)
-        ox.append(20)
+        ox.append(top_vertex[1])
         oy.append(y)
 
     # === 4. Set Start & Goal (could be user-defined, or random within boundary) ===
@@ -343,18 +350,10 @@ def main():
         plt.plot(rx, ry, "-r", label="Path")
         plt.legend()
         plt.pause(0.001)
+        plt.gca().invert_yaxis()  # for visualization
         plt.show()
 
     print(f"Planned Path (grid coordinates): {list(zip(rx, ry))}")
-
-
-def random_coordinate(bottom_vertex, top_vertex):
-    """
-    Generate random (x, y) coordinate within the 20x20 grid boundary.
-    """
-    x = np.random.randint(bottom_vertex[0] + 1, top_vertex[0])
-    y = np.random.randint(bottom_vertex[1] + 1, top_vertex[1])
-    return [x, y]
 
 
 if __name__ == "__main__":
