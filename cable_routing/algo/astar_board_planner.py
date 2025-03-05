@@ -154,26 +154,25 @@ def draw_planner_overlay(
 def main():
 
     planner = BoardPlanner(show_animation=False)
+    img_copy = planner.full_img.copy()
 
     ########################################
     # comment if camera is not available
-    import rospy
-    from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
+    # import rospy
+    # from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 
-    rospy.init_node("testtest")
-    zed_cam = ZedCameraSubscriber()
-    while zed_cam.rgb_image is None or zed_cam.depth_image is None:
-        rospy.sleep(0.1)
-        rospy.loginfo("Waiting for images from ZED camera...")
-    frame = zed_cam.get_rgb()
+    # rospy.init_node("testtest")
+    # zed_cam = ZedCameraSubscriber()
+    # while zed_cam.rgb_image is None or zed_cam.depth_image is None:
+    #     rospy.sleep(0.1)
+    #     rospy.loginfo("Waiting for images from ZED camera...")
+    # frame = zed_cam.get_rgb()
 
-    start_pixel = select_target_point(frame, rule="start")
-    goal_pixel = select_target_point(frame, rule="end")
+    start_pixel = select_target_point(img_copy, rule="start")
+    goal_pixel = select_target_point(img_copy, rule="end")
     #########################################
 
     path_in_pixels = planner.plan_path(start_pixel, goal_pixel)
-
-    img_copy = planner.full_img.copy()
 
     draw_planner_overlay(
         img_copy,
