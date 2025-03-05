@@ -3,6 +3,9 @@ from cable_routing.env.dummy_env import DummyExperimentEnv
 import os
 import cv2
 print(os.getcwd())
+import torch
+import time
+DummyExperimentEnv()
 from scipy.interpolate import UnivariateSpline, make_splrep
 
 img_path = 'data/zed_images/img_1.png'
