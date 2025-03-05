@@ -24,18 +24,19 @@ def main(args: ExperimentConfig):
     )
     board.add_cable(goal_cable)
 
-    path = env.update_cable_path()
+    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
 
     cur_cable = Cable(
-        coordinates=path,
+        coordinates=path_in_pixels,
         env_keypoints=board.key_locations,
         grid_size=board.grid_size,
         id=0,
     )
     board.add_cable(cur_cable)
 
-    env.goto_cable_node(path)
-
+    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
+        path_in_pixels, cable_orientations
+    )
     env.robot.move_to_home()
 
 

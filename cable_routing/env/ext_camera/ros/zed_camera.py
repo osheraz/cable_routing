@@ -32,6 +32,7 @@ class ZedCameraSubscriber:
         self.w = camera_info.width
         self.h = camera_info.height
 
+        self.img_shape = (self.h, self.w)
         # TODO from cfg
         self.far_clip = 1
         self.near_clip = 0.1

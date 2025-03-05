@@ -9,14 +9,16 @@ import time
 
 
 class YuMiRobotEnv:
-    def __init__(self, robot_config):
+    def __init__(self, robot_config, speed=0.2):
         print("[YUMI_JACOBI] Initializing YuMi...")
 
         self.robot_config = robot_config
-        self.interface = Interface(speed=0.2)
+        self.speed = speed
+        self.interface = Interface(speed=speed)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.gripper_opening = 5
+
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
@@ -26,6 +28,7 @@ class YuMiRobotEnv:
     def move_to_home(self) -> None:
         """Moves both arms to the home position."""
         # self.interface.home()
+        self.interface.yumi.set_speed(self.speed)
         home_left = self.robot_config.LEFT_HOME_POS
         home_right = self.robot_config.RIGHT_HOME_POS
         self.set_joint_positions(left_positions=home_left, right_positions=home_right)
@@ -310,13 +313,14 @@ class YuMiRobotEnv:
 
         # Close gripper to grasp the object
         self.close_grippers(side=arm, wait=True)
-        self.interface.yumi.set_speed(original_speed)
 
-        target_pose.translation[2] += 0.05
-        self.set_ee_pose(
-            left_pose=target_pose if arm == "left" else None,
-            right_pose=target_pose if arm == "right" else None,
-        )
+        # self.interface.yumi.set_speed(original_speed)
+
+        # target_pose.translation[2] += 0.05
+        # self.set_ee_pose(
+        #     left_pose=target_pose if arm == "left" else None,
+        #     right_pose=target_pose if arm == "right" else None,
+        # )
 
         print(f"{arm.capitalize()} arm grasp completed.")
 

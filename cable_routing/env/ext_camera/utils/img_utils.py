@@ -21,7 +21,7 @@ def get_path_angle(path, N=5):
     return angle
 
 
-def get_perpendicular_ori(b, a):
+def get_cable_ori(b, a):
     b, a = np.array(b)[:2], np.array(a)[:2]
     tangent = a - b
     tangent /= np.linalg.norm(tangent)
@@ -40,7 +40,7 @@ def pick_target_on_path(img, path):
     img_display = img.copy()
 
     for x, y in path:
-        cv2.circle(img_display, (x, y), 2, (0, 255, 0), -1)
+        cv2.circle(img_display, (x, y), 2, (255, 0, 0), -1)
 
     selected_point = select_target_point(img_display)
     if selected_point is not None:

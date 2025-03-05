@@ -15,8 +15,10 @@ def main(args: ExperimentConfig):
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
 
-    path = env.update_cable_path()
-    env.goto_cable_node(path)
+    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
+    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
+        path_in_pixels, cable_orientations
+    )
     env.goto_clip_node()
 
     env.robot.move_to_home()

@@ -23,10 +23,10 @@ def main(args: ExperimentConfig):
         id=-1,
     )
 
-    path = env.update_cable_path()
+    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
 
     cur_cable = Cable(
-        coordinates=path,
+        coordinates=path_in_pixels,
         env_keypoints=board.key_locations,
         grid_size=board.grid_size,
         id=-1,
@@ -41,8 +41,9 @@ def main(args: ExperimentConfig):
     counts["Add"] += len([idea for idea in suggestion[0] if "Add" in idea])
     counts["Swap"] += len([idea for idea in suggestion[0] if "Swap" in idea])
     counts["Remove"] += len([idea for idea in suggestion[0] if "Remove" in idea])
-    env.goto_cable_node(path)
-
+    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
+        path_in_pixels, cable_orientations
+    )
     env.robot.move_to_home()
 
 

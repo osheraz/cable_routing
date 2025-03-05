@@ -3,15 +3,16 @@ import cv2
 import numpy as np
 import json
 import os
-from sensor_msgs.msg import CameraInfo
-from autolab_core import RigidTransform
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
+from cable_routing.configs.envconfig import ExperimentConfig
 
 
 class ClipPlacementGUI:
     def __init__(self):
         rospy.init_node("clip_placement_tool")
         self.zed_cam = ZedCameraSubscriber()
+        cfg = ExperimentConfig
+
         self.wait_for_camera()
         self.image, (self.crop_x, self.crop_y) = self.load_zed_image()
         self.clip_positions = self.load_board_config()
@@ -19,9 +20,8 @@ class ClipPlacementGUI:
         self.current_clip_type = 1
         self.preview_position = None
         self.clip_types = {1: "6Pin", 2: "2Pin", 3: "C-Clip", 4: "Plug"}
-        self.config_path = "/home/osheraz/cable_routing/data/board_config.json"
-        self.annotated_img_path = "/home/osheraz/cable_routing/data/board_setup.png"
-
+        self.config_path = cfg.board_cfg_path
+        self.annotated_img_path = cfg.bg_img_path
         cv2.namedWindow("Board Setup")
         cv2.setMouseCallback("Board Setup", self.preview_clip)
 
