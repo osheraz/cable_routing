@@ -29,3 +29,8 @@ __pycache__/
 /cable_routing/handloom/trace_test
 /cable_routing/scripts/calibration/test_calibration
 /trace_test
+
+.DS_Store
+._.DS_Store
+**/.DS_Store
+**/._.DS_Store
