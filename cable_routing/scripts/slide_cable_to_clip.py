@@ -11,9 +11,11 @@ def main(args: ExperimentConfig):
     env = ExperimentEnv(args)
 
     path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
+
     grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
         path_in_pixels, cable_orientations
     )
+
     env.slideto_cable_node(path_in_pixels, path_in_world, cable_orientations, idx)
 
     env.robot.go_delta(

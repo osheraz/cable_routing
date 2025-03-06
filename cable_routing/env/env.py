@@ -1,3 +1,4 @@
+from math import e
 import rospy
 import numpy as np
 import cv2
@@ -9,13 +10,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import datetime
 import os
-import math
+from scipy.spatial import KDTree
 from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.handloom.handloom_pipeline.single_tracer import CableTracer
 from cable_routing.env.board.new_board import Board
-from cable_routing.algo.astar_board_planner import BoardPlanner
+from cable_routing.algo.astar_board_planner import BoardPlanner, draw_planner_overlay
 from cable_routing.env.ext_camera.utils.img_utils import (
     crop_img,
     crop_board,
@@ -23,7 +24,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     get_world_coord_from_pixel_coord,
     pick_target_on_path,
     find_nearest_point,
-    get_cable_ori,
+    get_perpendicular_orientation,
     get_path_angle,
 )  # TODO: Split to env_utils, img_utils etc..
 from cable_routing.env.ext_camera.utils.pcl_utils import project_points_to_image
@@ -56,7 +57,7 @@ class ExperimentEnv:
         ).as_frames(from_frame="zed", to_frame="base_link")
 
         self.tracer = CableTracer()
-        self.planner = BoardPlanner(show_animation=True)
+        self.planner = BoardPlanner(show_animation=False)
 
         ######################################################
         # self.set_board_region()
@@ -70,6 +71,8 @@ class ExperimentEnv:
         rospy.logwarn("Env is ready")
 
         self.cable_in_arm = None
+
+        self.workspace_img = self.zed_cam.get_rgb().copy()
 
     def get_extrinsic(self):
 
@@ -117,7 +120,7 @@ class ExperimentEnv:
 
                 # abort = input("Abort? (y/n): ") == "y"
 
-    def update_cable_path(self, start_points=None, end_points=None):
+    def update_cable_path(self, start_points=None, end_points=None, display=False):
 
         path_in_pixels, _ = self.trace_cable(
             start_points=start_points, end_points=end_points
@@ -128,14 +131,49 @@ class ExperimentEnv:
         path_in_world = self.convert_path_to_world_coord(path_in_pixels)
 
         cable_orientations = [
-            get_cable_ori(
+            get_perpendicular_orientation(
                 path_in_world[idx - 1],
                 path_in_world[idx],
             )
             for idx in range(1, len(path_in_world))
         ]
-        cable_orientations.insert(0, cable_orientations[0])
+
         cable_orientations.append(cable_orientations[-1])
+
+        cable_orientations = np.unwrap(cable_orientations)
+        cable_orientations = np.mod(cable_orientations, 2 * np.pi).tolist()
+
+        if display:
+            path_arr = np.array(path_in_world)
+
+            plt.figure(figsize=(10, 8))
+            plt.plot(path_arr[:, 0], path_arr[:, 1], "b-", label="Cable Path")
+
+            for idx, (point, orientation) in enumerate(
+                zip(path_in_world, cable_orientations)
+            ):
+                dx = 0.02 * np.cos(orientation)
+                dy = 0.02 * np.sin(orientation)
+
+                plt.arrow(
+                    point[0],
+                    point[1],
+                    dx,
+                    dy,
+                    head_width=0.005,
+                    head_length=0.01,
+                    fc="red",
+                    ec="red",
+                )
+                plt.text(point[0], point[1], f"{idx}", fontsize=12, color="darkgreen")
+
+            plt.xlabel("X (meters)")
+            plt.ylabel("Y (meters)")
+            plt.legend()
+            plt.axis("equal")
+            plt.grid(True)
+            plt.title("Cable Path with Orientations")
+            plt.show()
 
         return path_in_pixels, path_in_world, cable_orientations
 
@@ -213,7 +251,7 @@ class ExperimentEnv:
             arm = "right" if world_coord[1] < 0 else "left"
 
             self.robot.single_hand_grasp(
-                arm, world_coord, eef_rot=cable_ori + np.pi / 2, slow_mode=True
+                arm, world_coord, eef_rot=cable_ori, slow_mode=True
             )
 
             # should update upon success
@@ -275,66 +313,52 @@ class ExperimentEnv:
 
         self.robot.single_hand_move(self.cable_in_arm, target_coord, slow_mode=True)
 
-    def slideto_cable_node(
-        self,
-        path_in_pixel,
-        path_in_world,
-        cable_orientations,
-        idx,
-        side="up",
-        single_hand=True,
-        display=True,
-    ):
+    def plan_slide_to_cable_node(self, path_in_pixel, idx, side="up", display=True):
 
-        frame = self.zed_cam.get_rgb()
-
-        move_to_pixel = select_target_point(frame, rule="clip")
-
-        # clip = self.board.find_nearest_clip([move_to_pixel])
-        # move_to_pixel = [clip["x"], clip["y"]]
+        move_to_pixel = select_target_point(self.workspace_img, rule="clip")
+        clip = self.board.find_nearest_clip([move_to_pixel])
+        clip_pixel = [clip["x"], clip["y"]]
 
         world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel,
+            clip_pixel,
             self.zed_cam.intrinsic,
             self.T_CAM_BASE,
             is_clip=True,
         )
 
-        offset = {
-            "left": [0, 0.02, 0],
-            "right": [0, -0.02, 0],
-            "down": [-0.02, 0, 0],
-            "up": [0.02, 0, 0],
+        pixel_offset = {
+            "left": [-60, 0],  # must be higher than inflation_radius
+            "right": [60, 0],
+            "down": [0, 60],
+            "up": [0, -60],
         }[side]
 
-        target_coord = world_coord + np.array(offset)
+        goal_pixel = np.array(clip_pixel) + np.array(pixel_offset)
 
-        current_pose = self.robot.get_ee_pose()[0 if self.cable_in_arm == "left" else 1]
-
-        target_coord[2] = current_pose.translation[2]
-
-        # current_pixel = project_points_to_image(
-        #     np.array([current_pose.translation]),
-        #     self.zed_cam.intrinsic._K,
-        #     self.T_CAM_BASE,
-        #     self.zed_cam.img_shape,
-        # )[0]
-
-        waypoints = self.convert_path_to_world_coord(
-            self.planner.plan_path(
-                start_pixel=path_in_pixel[idx], goal_pixel=move_to_pixel
-            )
+        target_coord = get_world_coord_from_pixel_coord(
+            goal_pixel,
+            self.zed_cam.intrinsic,
+            self.T_CAM_BASE,
+            is_clip=True,
         )
 
-        # should just go down to board height
-        poses = [
-            RigidTransform(translation=waypoint, rotation=current_pose.rotation)
-            for waypoint in [current_pose.translation, waypoints[0]]
-        ]
-
-        self.robot.plan_and_execute_linear_waypoints(self.cable_in_arm, waypoints=poses)
+        start_pixel = path_in_pixel[idx]
+        waypoints_in_pixels = self.planner.plan_path(
+            start_pixel=start_pixel,
+            goal_pixel=goal_pixel,  #  move_to_pixel - directly to the point
+        )
+        waypoints = self.convert_path_to_world_coord(waypoints_in_pixels)
 
         if display:
+
+            draw_planner_overlay(
+                self.workspace_img,
+                self.planner,
+                start_pixel,
+                goal_pixel,
+                waypoints_in_pixels,
+                self.planner.resolution,
+            )
 
             path_arr = np.array(
                 self.convert_path_to_world_coord(self.board.cable_positions)
@@ -369,8 +393,8 @@ class ExperimentEnv:
             plt.arrow(
                 world_coord[0],
                 world_coord[1],
-                offset[0],
-                offset[1],
+                target_coord[0] - world_coord[0],
+                target_coord[1] - world_coord[1],
                 head_width=0.01,
                 head_length=0.015,
                 fc="r",
@@ -386,33 +410,132 @@ class ExperimentEnv:
             plt.title(f"Sliding to Clip (Approach: {side})")
             plt.show()
 
-        # Open the gripper a bit
+        return {
+            "waypoints": waypoints,
+            "target_coord": target_coord,
+        }
+
+    def execute_slide_to_cable_node(
+        self, waypoints, target_coord, cable_orientations, display=True
+    ):
+        current_pose = self.robot.get_ee_pose()[0 if self.cable_in_arm == "left" else 1]
+        target_coord[2] = current_pose.translation[2]  # Preserve current Z height
+
+        # Open gripper slightly -- fix!
         cur_gripper_pos = self.robot.get_gripper_pose(self.cable_in_arm)
         self.robot.grippers_move_to(
             self.cable_in_arm, distance=cur_gripper_pos + self.robot.gripper_opening
         )
 
-        from scipy.spatial import KDTree
+        eef_orientations = [
+            get_perpendicular_orientation(waypoints[i - 1], waypoints[i])
+            for i in range(1, len(waypoints))
+        ]
+        eef_orientations.append(eef_orientations[-1])
 
-        eef_orientations = [c + np.pi / 2 for c in cable_orientations][idx:]
-        cable_tree = KDTree(path_in_world[idx:])
+        eef_orientations = np.unwrap(eef_orientations)
+        eef_orientations = np.mod(eef_orientations, 2 * np.pi).tolist()
 
-        # ISSUE TODO FIX
+        if display:
+            path_arr = np.array(waypoints)
+
+            plt.figure(figsize=(10, 8))
+            plt.plot(path_arr[:, 0], path_arr[:, 1], "b-", label="Cable Path")
+
+            for idx, (point, orientation) in enumerate(
+                zip(waypoints, eef_orientations)
+            ):
+                dx = 0.02 * np.cos(orientation)
+                dy = 0.02 * np.sin(orientation)
+
+                plt.arrow(
+                    point[0],
+                    point[1],
+                    dx,
+                    dy,
+                    head_width=0.005,
+                    head_length=0.01,
+                    fc="red",
+                    ec="red",
+                )
+                plt.text(point[0], point[1], f"{idx}", fontsize=12, color="darkgreen")
+
+            plt.xlabel("X (meters)")
+            plt.ylabel("Y (meters)")
+            plt.legend()
+            plt.axis("equal")
+            plt.grid(True)
+            plt.title("Cable Path with Orientations")
+            plt.show()
+
+        # Move to the first waypoint at the correct height
+        self.robot.set_speed("slow")
+        poses = [
+            RigidTransform(translation=waypoint, rotation=current_pose.rotation)
+            for waypoint in [current_pose.translation, waypoints[0]]
+        ]
+        self.robot.plan_and_execute_linear_waypoints(self.cable_in_arm, waypoints=poses)
+        self.robot.set_speed("normal")
+
+        # Align orientation to first segment
+        poses = [
+            RigidTransform(
+                translation=waypoints[0],
+                rotation=current_pose.rotation,
+            ),
+            RigidTransform(
+                translation=waypoints[0],
+                rotation=RigidTransform.x_axis_rotation(np.pi)
+                @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
+            ),
+        ]
+        self.robot.plan_and_execute_linear_waypoints(self.cable_in_arm, waypoints=poses)
+
+        # Follow the full path
         poses = [
             RigidTransform(
                 translation=wp,
                 rotation=RigidTransform.x_axis_rotation(np.pi)
-                @ RigidTransform.z_axis_rotation(
-                    eef_orientations[cable_tree.query(wp)[1]]
-                ),
+                @ RigidTransform.z_axis_rotation(-ori),
             )
-            for wp in waypoints
+            for wp, ori in zip(waypoints, eef_orientations)
         ]
 
         for start_pose, end_pose in zip(poses, poses[1:]):
             self.robot.plan_and_execute_linear_waypoints(
                 self.cable_in_arm, waypoints=[start_pose, end_pose]
             )
+            actual_pose = self.robot.get_ee_pose()[
+                0 if self.cable_in_arm == "left" else 1
+            ]
+            error = np.linalg.norm(actual_pose.translation - end_pose.translation)
+            print(f"Pose deviation = {error:.4f} meters")
+            # if error > POSITION_TOLERANCE:
+            #     raise RuntimeError(f"Failed to reach pose: error = {error:.4f} meters")
+
+        self.robot.set_ee_pose(
+            left_pose=(poses[-1] if self.cable_in_arm == "left" else None),
+            right_pose=(poses[-1] if self.cable_in_arm == "right" else None),
+        )
+
+    def slideto_cable_node(
+        self,
+        cable_path_in_pixel,
+        path_in_world,
+        cable_orientations,
+        idx,
+        side="up",
+        single_hand=True,
+        display=True,
+    ):
+        plan = self.plan_slide_to_cable_node(
+            cable_path_in_pixel, idx, side=side, display=display
+        )
+        self.execute_slide_to_cable_node(
+            plan["waypoints"],
+            plan["target_coord"],
+            cable_orientations,
+        )
 
     def trace_cable(self, img=None, start_points=None, end_points=None, viz=False):
 
@@ -431,6 +554,7 @@ class ExperimentEnv:
 
         if start_points == None:
             start_points = select_target_point(img, rule="start")
+
         if end_points == None:
             end_points = select_target_point(img, rule="end")
 

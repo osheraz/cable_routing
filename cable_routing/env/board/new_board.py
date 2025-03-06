@@ -106,7 +106,7 @@ class Board:
             coordinates=cable_positions,
             env_keypoints=self.key_locations,
             grid_size=self.grid_size,
-            id=np.random.randint(1),
+            id=np.random.randint(10),
         )
         self.add_cable(cable)
         self.cable_positions = cable_positions
@@ -149,7 +149,7 @@ class Board:
         for cable in self.cables:
             self.cables[cable].update_keypoints(self.key_locations)
 
-    def visualize_board(self, img, quantized=False):
+    def visualize_board(self, img, quantized=True):
 
         img_display = img.copy()
 
@@ -170,19 +170,12 @@ class Board:
         #         img_display, clip["x"], clip["y"], clip["type"], clip["orientation"]
         #     )
 
-        def random_color():
-            return (
-                random.randint(0, 255),  # Blue
-                random.randint(0, 255),  # Green
-                random.randint(0, 255),  # Red
-            )
-
         if quantized:
             for id in self.cables:
                 cable = self.cables[id]
                 cable_points = cable.get_quantized()
 
-                color = random_color()
+                color = (255, 0, 255) if id == 0 else (255, 255, 0)
 
                 for i in range(len(cable_points) - 1):
                     p1 = tuple(
@@ -203,7 +196,7 @@ class Board:
                 cable = self.cables[id]
                 cable_points = cable.get_points()
 
-                color = random_color()
+                color = (255, 0, 0)
 
                 for i in range(len(cable_points) - 1):
                     p1 = tuple(cable_points[i])
@@ -324,7 +317,7 @@ if __name__ == "__main__":
     img = cv2.imread(img_path)
 
     goal_sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
-    cur_sequence = [(701, 84), (974, 256), (829, 177), (1317, 559)]
+    cur_sequence = [(701, 84), (974, 256), (1317, 559)]
 
     goal_cable = Cable(
         coordinates=goal_sequence,
@@ -349,4 +342,4 @@ if __name__ == "__main__":
     )
     print(suggestion)
 
-    annotated_img = board.visualize_board(img, quantized=False)
+    annotated_img = board.visualize_board(img, quantized=True)

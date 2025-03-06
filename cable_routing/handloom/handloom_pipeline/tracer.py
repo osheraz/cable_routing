@@ -504,16 +504,16 @@ class Tracer:
                         abs(global_yx[1] - endpoint[1])
                     ) < self.ep_buffer:
 
-                        if pix_dist > 0.3:  # minimal length
-                            max_sums = find_crossings(image, path)
-                            return (
-                                path,
-                                TraceEnd.ENDPOINT,
-                                heatmaps,
-                                crops,
-                                covariances,
-                                max_sums,
-                            )
+                        # if pix_dist > 0.3:  # minimal length
+                        max_sums = find_crossings(image, path)
+                        return (
+                            path,
+                            TraceEnd.ENDPOINT,
+                            heatmaps,
+                            crops,
+                            covariances,
+                            max_sums,
+                        )
 
             # Stoping case 5 : trace went backwards
             # if clips is not None:
@@ -703,7 +703,7 @@ class Tracer:
             plt.imsave(f"{save_folder}/trace_{idx}.png", trace_viz)
 
         spline = np.array(spline)
-        spline = np.concatenate((starting_points, spline), axis=0)
+        # spline = np.concatenate((starting_points, spline), axis=0)
 
         return np.array(spline), trace_end, heatmaps, crops, covariances, max_sums
 

@@ -10,9 +10,17 @@ from cable_routing.env.ext_camera.utils.img_utils import crop_img, select_target
 
 class BoardPlanner:
     def __init__(
-        self, config_path=None, resolution=40.0, robot_radius=40, show_animation=False
+        self,
+        config_path=None,
+        resolution=30.0,
+        robot_radius=10.0,
+        inflation_radius=40.0,
+        show_animation=False,
     ):
         self.show_animation = show_animation
+        self.resolution = resolution
+        self.robot_radius = robot_radius
+        self.inflation_radius = inflation_radius
 
         self.cfg = ExperimentConfig
         self.board = Board(config_path=config_path or self.cfg.board_cfg_path)
@@ -22,12 +30,11 @@ class BoardPlanner:
         self.p2 = self.board.point2
         self.full_img = cv2.imread(self.cfg.bg_img_path)
         self.img = crop_img(self.full_img.copy(), self.p1, self.p2)
-        self.resolution = resolution
-        self.robot_radius = robot_radius
+
         # Pre-load obstacles directly in pixel space (cropped coordinates)
         self.ox, self.oy = self._extract_obstacles()
 
-    def _extract_obstacles(self, inflation_radius=10):
+    def _extract_obstacles(self):
 
         ox, oy = [], []
         clips = self.board.get_clips()
@@ -36,10 +43,10 @@ class BoardPlanner:
             clip_x = clip["x"] - self.p1[0]
             clip_y = clip["y"] - self.p1[1]
 
-            for angle in range(0, 360, 10):
+            for angle in range(0, 360, 1):
                 rad = np.deg2rad(angle)
-                x = int(clip_x + inflation_radius * np.cos(rad))
-                y = int(clip_y + inflation_radius * np.sin(rad))
+                x = int(clip_x + self.inflation_radius * np.cos(rad))
+                y = int(clip_y + self.inflation_radius * np.sin(rad))
                 ox.append(x)
                 oy.append(y)
 
