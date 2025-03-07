@@ -316,8 +316,8 @@ if __name__ == "__main__":
     board = Board(config_path=config_path, grid_size=(20, 20))
     img = cv2.imread(img_path)
 
-    goal_sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
-    cur_sequence = [(701, 84), (974, 256), (1317, 559)]
+    cur_sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
+    goal_sequence = [(701, 84), (974, 256), (1182, 248), (1317, 559)]
 
     goal_cable = Cable(
         coordinates=goal_sequence,

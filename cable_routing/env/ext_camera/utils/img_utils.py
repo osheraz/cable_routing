@@ -137,7 +137,7 @@ def get_world_coord_from_pixel_coord(
     table_depth=0.835,
     depth_map=None,
     neighborhood_radius=10,
-    display=False,
+    display=True,
     is_clip=False,
 ):
     pixel_coord = np.array(pixel_coord, dtype=np.float32)
