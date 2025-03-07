@@ -7,7 +7,7 @@ class Cable:
     including estimates of their positions and key points.
     """
 
-    def __init__(self, coordinates, env_keypoints, grid_size, id):
+    def __init__(self, coordinates, environment, grid_size, id):
         """
         Instantiate an instance of our cable object.
 
@@ -24,14 +24,15 @@ class Cable:
                 None
         """
         self.true_coordinates = coordinates.copy()
+        self.environment = environment
         self.quantized = []
         self.keypoints = []
         self.id = id
         self.grid_size = grid_size
         self.update_quantized(grid_size=grid_size)
-        self.update_keypoints(env_keypoints=env_keypoints)
+        self.update_keypoints(environment)
 
-    def update_keypoints(self, env_keypoints=None):
+    def update_keypoints(self, environment=None):
         """
         Update the set of the keypoints for the cable,
 
@@ -43,11 +44,38 @@ class Cable:
         Returns:
                 None
         """
+        
+        
+        abs_value = lambda x: x if x > 0 else -x
 
-        if env_keypoints != None:
-            self.keypoints = [
-                point for point in self.quantized if point in env_keypoints
-            ]
+        if environment != None:
+            self.keypoints = []
+            for point in self.quantized:
+                if point in environment.key_locations:
+                    feature = environment.key_features[point]
+                    if feature.type in ["Clip", "6Pin"]:
+                        true_point = self.true_point(point)
+                        # true_point = find_first(self.true_coordinates, lambda x: (
+                        #         int(round(x[0] / self.grid_size[0])),
+                        #         int(round(x[1] / self.grid_size[1])),
+                        #     ) == point
+                        # )
+                        
+                        xdiff = true_point[0]-point[0]*self.grid_size[0]
+                        ydiff = true_point[1]-point[1]*self.grid_size[1]
+                        direction = 0
+                        if abs_value(xdiff) > abs_value(ydiff):
+                            if xdiff < 0:
+                                direction = 2
+                        else:
+                            if ydiff > 0:
+                                direction = 1
+                            else:
+                                direction = 3
+                        
+                        point = (point[0], point[1], direction)
+                        
+                    self.keypoints.append(point)
 
     def update_quantized(self, grid_size=None):
         """
@@ -78,6 +106,16 @@ class Cable:
                 if quantized_coords[i] != most_recent_coord:
                     self.quantized.append(quantized_coords[i])
                     most_recent_coord = quantized_coords[i]
+
+    def true_point(self, coord):
+        find_first = lambda list, condition: [item for item in list if condition(item)][0]
+        true_point = find_first(self.true_coordinates, lambda x: (
+                                int(round(x[0] / self.grid_size[0])),
+                                int(round(x[1] / self.grid_size[1])),
+                            ) == coord
+                        )
+
+        return true_point
 
     # Appropriate getter functions
     def get_keypoints(self):

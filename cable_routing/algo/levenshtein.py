@@ -89,8 +89,8 @@ def levenshtein_algo(given, desired, environment, human_readable=True):
 
     instructions = []
 
-    # print(buildx)
-    # print(buildy)
+    print(buildx)
+    print(buildy)
 
     if human_readable:
         for i in range(len(buildx)):
@@ -128,6 +128,7 @@ def levenshtein_algo(given, desired, environment, human_readable=True):
             elif buildx[i] != buildy[i]:
                 instructions.append(f"Swap {buildx[i]} to {buildy[i]}")
     else:
+        to_pixel_space = lambda my_tuple: tuple([environment.grid_size[0] * my_tuple[0], environment.grid_size[0] * my_tuple[1]] + [my_tuple[n] for n in range(2, len(my_tuple))])
         for i in range(len(buildx)):
             if buildx[i] == "Add":
 
@@ -146,20 +147,20 @@ def levenshtein_algo(given, desired, environment, human_readable=True):
                 if prev_index < 0:
                     first_print = None
                 else:
-                    first_print = buildx[prev_index]
+                    first_print = to_pixel_space(buildx[prev_index])
 
                 if next_index >= len(buildx):
                     last_print = None
                 else:
-                    last_print = buildx[next_index]
+                    last_print = to_pixel_space(buildx[next_index])
 
-                instructions.append(("Add", buildy[i], first_print, last_print))
+                instructions.append(("Add", to_pixel_space(buildy[i]), first_print, last_print))
 
                 # instructions.append(f"Add {str(buildy[i])} at step {i}")
             elif buildy[i] == "Remove":
-                instructions.append(("Remove", buildx[i], None, None))
+                instructions.append(("Remove", to_pixel_space(buildx[i]), None, None))
             elif buildx[i] != buildy[i]:
-                instructions.append(("Swap", buildx[i], buildy[i], None))
+                instructions.append(("Swap", to_pixel_space(buildx[i]), to_pixel_space(buildy[i]), None))
 
     return instructions
 
