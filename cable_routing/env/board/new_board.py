@@ -104,7 +104,7 @@ class Board:
         """
         cable = Cable(
             coordinates=cable_positions,
-            env_keypoints=self.key_locations,
+            environment=self,
             grid_size=self.grid_size,
             id=np.random.randint(1),
         )
@@ -122,7 +122,7 @@ class Board:
                         None
         """
         self.cables[cable.get_id()] = cable
-        cable.update_keypoints(self.key_locations)  # associate keylocation
+        cable.update_keypoints(self)  # associate keylocation
 
         for coordinate in cable.get_quantized():
             if self.board[coordinate[1]][coordinate[0]] == ".":
@@ -147,7 +147,7 @@ class Board:
         self.key_locations.add(feature.get_position())
         self.key_features[feature.get_position()] = feature
         for cable in self.cables:
-            self.cables[cable].update_keypoints(self.key_locations)
+            self.cables[cable].update_keypoints(self)
 
     def visualize_board(self, img, quantized=False):
 
@@ -307,6 +307,12 @@ class BoardFeature:
     def get_position(self):
         return (self.coordinate[0], self.coordinate[1])
 
+    def get_tuple(self):
+        if self.type in ["Clip"]:
+            return self.coordinate
+        else:
+            return (self.coordinate[0], self.coordinate[1])
+        
     def get_type(self):
         return self.type
 
@@ -323,18 +329,38 @@ if __name__ == "__main__":
     board = Board(config_path=config_path, grid_size=(20, 20))
     img = cv2.imread(img_path)
 
-    goal_sequence = [(701, 84), (829, 177), (974, 256), (890, 578), (1317, 559)]
-    cur_sequence = [(701, 84), (974, 256), (829, 177), (1317, 559)]
+    goal_keypoints = [(701, 84), (829, 177), (984, 246), (870, 578), (1300, 559)]
+    cur_keypoints = [(701, 84), (974, 256), (829, 177), (1300, 559)]
+
+    goal_sequence = []
+    num_steps = 5
+    # Interpolate sequences:
+    for k in range(len(goal_keypoints)-1):
+        goal_sequence.append(goal_keypoints[k])
+        for l in range(num_steps):
+            goal_sequence.append((goal_keypoints[k][0] + (goal_keypoints[k+1][0] - goal_keypoints[k][0])//num_steps, goal_keypoints[k][1] + (goal_keypoints[k+1][1] - goal_keypoints[k][1])//num_steps))
+    goal_sequence.append(goal_keypoints[-1])
+
+    cur_sequence = []
+    # Interpolate sequences:
+    for k in range(len(cur_keypoints)-1):
+        cur_sequence.append(cur_keypoints[k])
+        for l in range(num_steps):
+            cur_sequence.append((cur_keypoints[k][0] + (cur_keypoints[k+1][0] - cur_keypoints[k][0])//num_steps, cur_keypoints[k][1] + (cur_keypoints[k+1][1] - cur_keypoints[k][1])//num_steps))
+
+    cur_sequence.append(cur_keypoints[-1])
+
+    print(len(goal_sequence))
 
     goal_cable = Cable(
         coordinates=goal_sequence,
-        env_keypoints=board.key_locations,
+        environment=board,
         grid_size=board.grid_size,
         id=-1,
     )
     cur_cable = Cable(
         coordinates=cur_sequence,
-        env_keypoints=board.key_locations,
+        environment=board,
         grid_size=board.grid_size,
         id=0,
     )
@@ -345,7 +371,7 @@ if __name__ == "__main__":
     goal_config = {cur_cable.id: goal_cable}
 
     suggestion = suggest_modifications(
-        board, goal_configuration=goal_config, human_readable=True
+        board, goal_configuration=goal_config, human_readable=False
     )
     print(suggestion)
 
