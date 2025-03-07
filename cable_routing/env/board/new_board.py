@@ -106,7 +106,7 @@ class Board:
             coordinates=cable_positions,
             environment=self,
             grid_size=self.grid_size,
-            id=np.random.randint(1),
+            id=np.random.randint(10),
         )
         self.add_cable(cable)
         self.cable_positions = cable_positions
@@ -149,7 +149,7 @@ class Board:
         for cable in self.cables:
             self.cables[cable].update_keypoints(self)
 
-    def visualize_board(self, img, quantized=False):
+    def visualize_board(self, img, quantized=True):
 
         img_display = img.copy()
 
@@ -170,19 +170,12 @@ class Board:
         #         img_display, clip["x"], clip["y"], clip["type"], clip["orientation"]
         #     )
 
-        def random_color():
-            return (
-                random.randint(0, 255),  # Blue
-                random.randint(0, 255),  # Green
-                random.randint(0, 255),  # Red
-            )
-
         if quantized:
             for id in self.cables:
                 cable = self.cables[id]
                 cable_points = cable.get_quantized()
 
-                color = random_color()
+                color = (255, 0, 255) if id == 0 else (255, 255, 0)
 
                 for i in range(len(cable_points) - 1):
                     p1 = tuple(
@@ -203,7 +196,7 @@ class Board:
                 cable = self.cables[id]
                 cable_points = cable.get_points()
 
-                color = random_color()
+                color = (255, 0, 0)
 
                 for i in range(len(cable_points) - 1):
                     p1 = tuple(cable_points[i])
@@ -329,8 +322,9 @@ if __name__ == "__main__":
     board = Board(config_path=config_path, grid_size=(20, 20))
     img = cv2.imread(img_path)
 
-    goal_keypoints = [(701, 84), (829, 177), (984, 246), (870, 578), (1300, 559)]
-    cur_keypoints = [(701, 84), (974, 256), (829, 177), (1300, 559)]
+
+    goal_keypoints = [(708, 88), (827, 167), (974, 254), (886, 562), (1313, 562)]
+    cur_keypoints = [(701, 84), (974, 256), (829, 167), (1313, 559)]
 
     goal_sequence = []
     num_steps = 5
@@ -375,4 +369,4 @@ if __name__ == "__main__":
     )
     print(suggestion)
 
-    annotated_img = board.visualize_board(img, quantized=False)
+    annotated_img = board.visualize_board(img, quantized=True)

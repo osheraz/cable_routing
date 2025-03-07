@@ -21,7 +21,8 @@ def get_path_angle(path, N=5):
     return angle
 
 
-def get_cable_ori(b, a):
+def get_perpendicular_orientation(b, a):
+
     b, a = np.array(b)[:2], np.array(a)[:2]
     tangent = a - b
     tangent /= np.linalg.norm(tangent)
@@ -136,7 +137,7 @@ def get_world_coord_from_pixel_coord(
     table_depth=0.835,
     depth_map=None,
     neighborhood_radius=10,
-    display=True,
+    display=False,
     is_clip=False,
 ):
     pixel_coord = np.array(pixel_coord, dtype=np.float32)

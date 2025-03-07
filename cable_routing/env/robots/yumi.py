@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from yumi_jacobi import yumi
 from yumi_jacobi.interface import Interface
 from autolab_core import RigidTransform
 from cable_routing.configs.envconfig import ExperimentConfig
@@ -18,20 +19,29 @@ class YuMiRobotEnv:
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.gripper_opening = 5
-
-        self.open_grippers()
-        self.move_to_home()
         self.interface.calibrate_grippers()
+        self.move_to_home()
+        self.open_grippers()
+
         # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
     def move_to_home(self) -> None:
         """Moves both arms to the home position."""
-        # self.interface.home()
-        self.interface.yumi.set_speed(self.speed)
-        home_left = self.robot_config.LEFT_HOME_POS
-        home_right = self.robot_config.RIGHT_HOME_POS
-        self.set_joint_positions(left_positions=home_left, right_positions=home_right)
+        self.set_speed("normal")
+        lz, rz = (
+            self.get_ee_pose()[0].translation[2],
+            self.get_ee_pose()[1].translation[2],
+        )
+        if lz < 0.1 or rz < 0.1:
+            self.go_delta(
+                left_delta=(0, 0, 0.05 if lz < 0.1 else 0),
+                right_delta=(0, 0, 0.05 if rz < 0.1 else 0),
+            )
+        self.set_joint_positions(
+            left_positions=self.robot_config.LEFT_HOME_POS,
+            right_positions=self.robot_config.RIGHT_HOME_POS,
+        )
 
     def close_grippers(
         self, side: Literal["both", "left", "right"] = "both", wait: bool = False
@@ -43,7 +53,8 @@ class YuMiRobotEnv:
 
     def open_grippers(self, side: Literal["both", "left", "right"] = "both"):
         """Closes both grippers."""
-        self.interface.open_grippers(side)
+        # self.interface.open_grippers(side)
+        self.grippers_move_to(side, distance=5)
 
     def grippers_move_to(self, hand: Literal["left", "right", "both"], distance: int):
         """
@@ -288,8 +299,9 @@ class YuMiRobotEnv:
         print(f"Moving {arm} arm to the target position.")
         # Move above the target
         rot = RigidTransform.x_axis_rotation(np.pi) @ RigidTransform.z_axis_rotation(
-            eef_rot
-        )
+            -eef_rot
+        )  # TODO why -?
+
         target_pose = RigidTransform(rotation=rot, translation=world_coord)
 
         target_pose.translation[2] += 0.1
@@ -307,14 +319,12 @@ class YuMiRobotEnv:
                 right_pose=target_pose if arm == "right" else None,
             )
             # TODO wrap this function
-            original_speed = self.interface._async_interface.speed
             if slow_mode:
-                self.interface.yumi.set_speed(original_speed * 0.1)
+                self.set_speed("slow")
 
         # Close gripper to grasp the object
         self.close_grippers(side=arm, wait=True)
-
-        # self.interface.yumi.set_speed(original_speed)
+        self.set_speed("normal")
 
         # target_pose.translation[2] += 0.05
         # self.set_ee_pose(
@@ -323,6 +333,13 @@ class YuMiRobotEnv:
         # )
 
         print(f"{arm.capitalize()} arm grasp completed.")
+
+    def set_speed(self, speed: Literal["slow", "normal"]):
+
+        if speed == "slow":
+            self.interface.yumi.set_speed(self.speed * 0.1)
+        else:
+            self.interface.yumi.set_speed(self.speed)
 
     def single_hand_move(
         self,
@@ -348,10 +365,8 @@ class YuMiRobotEnv:
             right_pose=target_pose if arm == "right" else None,
         )
 
-        # TODO wrap this function
-        original_speed = self.interface._async_interface.speed
         if slow_mode:
-            self.interface.yumi.set_speed(original_speed * 0.1)
+            self.set_speed("slow")
 
         target_pose.translation[2] = world_coord[2]
         self.set_ee_pose(
@@ -361,7 +376,7 @@ class YuMiRobotEnv:
 
         # Close gripper to grasp the object
         self.open_grippers(side=arm)
-        self.interface.yumi.set_speed(original_speed)
+        self.set_speed("normal")
 
         # up a
         target_pose.translation[2] += 0.05
@@ -415,7 +430,7 @@ class YuMiRobotEnv:
 
         original_speed = self.interface._async_interface.speed
         if slow_mode:
-            self.interface.yumi.set_speed(original_speed * 0.1)
+            self.set_speed("slow")
 
         for _ in range(2):
             target_pose_left.translation[2] -= 0.05
@@ -427,7 +442,7 @@ class YuMiRobotEnv:
         target_pose_left.translation[2] += 0.1
         target_pose_right.translation[2] += 0.1
         self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
-        self.interface.yumi.set_speed(original_speed)
+        self.set_speed("normal")
 
         print("Dual-hand grasp completed.")
 
@@ -444,7 +459,7 @@ class YuMiRobotEnv:
 
         original_speed = self.interface._async_interface.speed
         if slow_mode:
-            self.interface.yumi.set_speed(original_speed * 0.1)
+            self.set_speed("slow")
 
         target_pose_left = RigidTransform(
             rotation=current_left.rotation, translation=new_left
@@ -454,7 +469,7 @@ class YuMiRobotEnv:
         )
 
         self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
-        # self.interface.yumi.set_speed(original_speed)
+        # self.set_speed("normal")
 
     def move_dual_hand_insertion(
         self,
@@ -550,120 +565,117 @@ def main(args: ExperimentConfig):
 
     # Initialize the YuMi robot environment
     yumi_env = YuMiRobotEnv(args.robot_cfg)
-
-    print("\n--- Initializing YuMi ---\n")
-    yumi_env.move_to_home()
-    yumi_env.open_grippers()
-
-    yumi_env.grippers_move_to("left", 5)
-    # Print FK for both arms
-    print("\n--- Forward Kinematics ---")
-    left_pose, right_pose = yumi_env.get_ee_pose()
-    print("Left Arm FK:", left_pose)
-    print("Right Arm FK:", right_pose)
-
-    # Calibrate and open grippers
-    print("\n--- Calibrating & Opening Grippers ---")
-    yumi_env.interface.calibrate_grippers()
-    yumi_env.interface.open_grippers()
-    print("Left Gripper Position:", yumi_env.interface.driver_left.get_gripper_pos())
-    print("Right Gripper Position:", yumi_env.interface.driver_right.get_gripper_pos())
-
-    # Close grippers
-    print("\n--- Closing Grippers ---")
-    yumi_env.close_grippers()
-    print(
-        "Left Gripper Position After Close:",
-        yumi_env.interface.driver_left.get_gripper_pos(),
+    #     def single_hand_grasp(
+    #     self,
+    #     arm: Literal["left", "right"],
+    #     world_coord: np.ndarray,
+    #     eef_rot: float = np.pi,
+    #     slow_mode: bool = True,
+    # ) -> None:
+    yumi_env.single_hand_grasp(
+        arm="right",
+        world_coord=[0.48742186, -0.09680866, 0.05],
+        eef_rot=+np.pi / 2,
     )
-    print(
-        "Right Gripper Position After Close:",
-        yumi_env.interface.driver_right.get_gripper_pos(),
-    )
+    # print("\n--- Initializing YuMi ---\n")
+    # yumi_env.move_to_home()
+    # yumi_env.open_grippers()
 
-    # Get joint values
-    print("\n--- Current Joint Positions ---")
-    left_joints, right_joints = yumi_env.get_joint_values()
-    print("Left Joint Positions:", left_joints)
-    print("Right Joint Positions:", right_joints)
+    # yumi_env.grippers_move_to("left", 5)
+    # # Print FK for both arms
+    # print("\n--- Forward Kinematics ---")
+    # left_pose, right_pose = yumi_env.get_ee_pose()
+    # print("Left Arm FK:", left_pose)
+    # print("Right Arm FK:", right_pose)
 
-    # Define waypoints for testing
-    wp1_l = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.4, 0.3, 0.2]
-    )
-    wp2_l = RigidTransform(
-        rotation=[[-1.0, 0.0, 0.0], [0.0, 0.9659, -0.2588], [0.0, -0.2588, -0.9659]],
-        translation=[0.4, 0.4, 0.1],
-    )
-    wp1_r = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.3, -0.2, 0.15]
-    )
-    wp2_r = RigidTransform(
-        rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.35, -0.05, 0.2]
-    )
+    # # Calibrate and open grippers
+    # print("\n--- Calibrating & Opening Grippers ---")
+    # yumi_env.interface.calibrate_grippers()
+    # yumi_env.interface.open_grippers()
+    # print("Left Gripper Position:", yumi_env.interface.driver_left.get_gripper_pos())
+    # print("Right Gripper Position:", yumi_env.interface.driver_right.get_gripper_pos())
 
-    print("\n--- Planning and Executing Linear Waypoints ---")
-    current_pose_l, current_pose_r = yumi_env.get_ee_pose()
+    # # Close grippers
+    # print("\n--- Closing Grippers ---")
+    # yumi_env.close_grippers()
+    # print(
+    #     "Left Gripper Position After Close:",
+    #     yumi_env.interface.driver_left.get_gripper_pos(),
+    # )
+    # print(
+    #     "Right Gripper Position After Close:",
+    #     yumi_env.interface.driver_right.get_gripper_pos(),
+    # )
 
-    # Plan and execute waypoints starting from the current pose
-    yumi_env.plan_and_execute_linear_waypoints(
-        arms="both",
-        start_pose_l=current_pose_l,
-        end_pose_l=wp2_l,
-        start_pose_r=current_pose_r,
-        end_pose_r=wp2_r,
-    )
+    # # Get joint values
+    # print("\n--- Current Joint Positions ---")
+    # left_joints, right_joints = yumi_env.get_joint_values()
+    # print("Left Joint Positions:", left_joints)
+    # print("Right Joint Positions:", right_joints)
 
-    # Test moving delta
-    print("\n--- Moving by Delta ---")
-    yumi_env.go_delta(left_delta=(0.05, 0, 0), right_delta=(-0.05, 0, 0))
+    # # Define waypoints for testing
+    # wp1_l = RigidTransform(
+    #     rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.4, 0.3, 0.2]
+    # )
+    # wp2_l = RigidTransform(
+    #     rotation=[[-1.0, 0.0, 0.0], [0.0, 0.9659, -0.2588], [0.0, -0.2588, -0.9659]],
+    #     translation=[0.4, 0.4, 0.1],
+    # )
+    # wp1_r = RigidTransform(
+    #     rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.3, -0.2, 0.15]
+    # )
+    # wp2_r = RigidTransform(
+    #     rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.35, -0.05, 0.2]
+    # )
 
-    # Test setting joint positions
-    print("\n--- Setting Joint Positions ---")
-    left_new_joints = np.clip(
-        np.array(left_joints) + 0.1, -2 * np.pi, 2 * np.pi
-    ).tolist()
-    right_new_joints = np.clip(
-        np.array(right_joints) - 0.1, -2 * np.pi, 2 * np.pi
-    ).tolist()
-    yumi_env.set_joint_positions(
-        left_positions=left_new_joints, right_positions=right_new_joints
-    )
+    # yumi_env.go_delta(left_delta=(0.05, 0, 0), right_delta=(-0.05, 0, 0))
 
-    # Test rotating grippers
-    print("\n--- Rotating Grippers ---")
-    yumi_env.rotate_gripper(angle=np.pi / 6, arm="both")
+    # # Test setting joint positions
+    # print("\n--- Setting Joint Positions ---")
+    # left_new_joints = np.clip(
+    #     np.array(left_joints) + 0.1, -2 * np.pi, 2 * np.pi
+    # ).tolist()
+    # right_new_joints = np.clip(
+    #     np.array(right_joints) - 0.1, -2 * np.pi, 2 * np.pi
+    # ).tolist()
+    # yumi_env.set_joint_positions(
+    #     left_positions=left_new_joints, right_positions=right_new_joints
+    # )
 
-    # Test setting end-effector pose
-    print("\n--- Setting End-Effector Pose ---")
-    new_pose_l = RigidTransform(rotation=wp2_l.rotation, translation=[0.35, 0.3, 0.15])
-    new_pose_r = RigidTransform(rotation=wp2_r.rotation, translation=[0.3, -0.1, 0.2])
-    yumi_env.set_ee_pose(left_pose=new_pose_l, right_pose=new_pose_r)
+    # # Test rotating grippers
+    # print("\n--- Rotating Grippers ---")
+    # yumi_env.rotate_gripper(angle=np.pi / 6, arm="both")
 
-    # Test applying delta action
-    print("\n--- Applying Delta Action ---")
-    yumi_env.go_delta_action(action_xyz=(0, 0, 0.05), action_theta=(0, 0, np.pi / 12))
+    # # Test setting end-effector pose
+    # print("\n--- Setting End-Effector Pose ---")
+    # new_pose_l = RigidTransform(rotation=wp2_l.rotation, translation=[0.35, 0.3, 0.15])
+    # new_pose_r = RigidTransform(rotation=wp2_r.rotation, translation=[0.3, -0.1, 0.2])
+    # yumi_env.set_ee_pose(left_pose=new_pose_l, right_pose=new_pose_r)
 
-    # Test setting pose using translation & rotation
-    print("\n--- Setting EE Pose Using Translation and Rotation ---")
-    yumi_env.set_ee_pose_from_trans_rot(trans=(0.4, 0.3, 0.15), rot=(0, 0, 0, 1))
+    # # Test applying delta action
+    # print("\n--- Applying Delta Action ---")
+    # yumi_env.go_delta_action(action_xyz=(0, 0, 0.05), action_theta=(0, 0, np.pi / 12))
 
-    # Test retrieving RPY
-    print("\n--- Getting End Effector RPY ---")
-    left_rpy, right_rpy = yumi_env.get_ee_rpy()
-    print("Left EE RPY:", left_rpy)
-    print("Right EE RPY:", right_rpy)
+    # # Test setting pose using translation & rotation
+    # print("\n--- Setting EE Pose Using Translation and Rotation ---")
+    # yumi_env.set_ee_pose_from_trans_rot(trans=(0.4, 0.3, 0.15), rot=(0, 0, 0, 1))
 
-    # Test retrieving Jacobian
-    print("\n--- Getting Jacobian Matrices ---")
-    try:
-        left_jacobian, right_jacobian = yumi_env.get_jacobian_matrix()
-        print("Left Jacobian:\n", left_jacobian)
-        print("Right Jacobian:\n", right_jacobian)
-    except NotImplementedError:
-        print("Jacobian computation not implemented yet.")
+    # # Test retrieving RPY
+    # print("\n--- Getting End Effector RPY ---")
+    # left_rpy, right_rpy = yumi_env.get_ee_rpy()
+    # print("Left EE RPY:", left_rpy)
+    # print("Right EE RPY:", right_rpy)
 
-    print("\n--- All Tests Completed Successfully ---")
+    # # Test retrieving Jacobian
+    # print("\n--- Getting Jacobian Matrices ---")
+    # try:
+    #     left_jacobian, right_jacobian = yumi_env.get_jacobian_matrix()
+    #     print("Left Jacobian:\n", left_jacobian)
+    #     print("Right Jacobian:\n", right_jacobian)
+    # except NotImplementedError:
+    #     print("Jacobian computation not implemented yet.")
+
+    # print("\n--- All Tests Completed Successfully ---")
 
 
 if __name__ == "__main__":
