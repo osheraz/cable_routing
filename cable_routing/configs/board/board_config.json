@@ -1,68 +1,68 @@
-[
-    {
+{
+    "A": {
         "x": 1274,
         "y": 94,
         "type": 1,
         "orientation": 0
     },
-    {
+    "B": {
         "x": 703,
         "y": 84,
         "type": 1,
         "orientation": 180
     },
-    {
+    "C": {
         "x": 658,
         "y": 552,
         "type": 2,
         "orientation": 180
     },
-    {
+    "D": {
         "x": 656,
         "y": 632,
         "type": 2,
         "orientation": 180
     },
-    {
+    "E": {
         "x": 1317,
         "y": 563,
         "type": 2,
         "orientation": 0
     },
-    {
+    "F": {
         "x": 1312,
         "y": 636,
         "type": 2,
         "orientation": 0
     },
-    {
+    "G": {
         "x": 888,
         "y": 590,
         "type": 3,
         "orientation": 90
     },
-    {
+    "H": {
         "x": 1182,
         "y": 250,
         "type": 3,
         "orientation": 270
     },
-    {
+    "I": {
         "x": 833,
         "y": 167,
         "type": 3,
         "orientation": 270
     },
-    {
+    "J": {
         "x": 976,
         "y": 254,
         "type": 4,
         "orientation": 270
     },
-    {
+    "K": {
         "x": 827,
         "y": 405,
         "type": 4,
         "orientation": 270
     }
-]
+}

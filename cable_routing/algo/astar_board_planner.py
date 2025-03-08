@@ -38,8 +38,10 @@ class BoardPlanner:
 
         ox, oy = [], []
         clips = self.board.get_clips()
+        print("printing clips")
+        print(clips)
 
-        for clip in clips:
+        for id, clip in clips.items():
             clip_x = clip["x"] - self.p1[0]
             clip_y = clip["y"] - self.p1[1]
 

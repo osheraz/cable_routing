@@ -5,93 +5,124 @@ from cable_routing.env.env import ExperimentEnv
 
 
 def main(args: ExperimentConfig):
+    """
+    Plan:
+        Input: given the sequence of clips that is desired and the starting clip where the cable is already plugged in
+
+        Need to route the cable through all of the desired clips in order
+
+        First:
+            Find the endpoint of the cable near the clip
+            Trace using handloom a little bit down the cable and grasp (so you don't grasp right next to the clip)
+                Grasp with enough closure to grab the cable but not enough to hold it in place (allow the cable to slip in the gripper)
+
+        Next:
+            Plan out the desired motion path through all the clips
+                We know clip orientations so need to plan out how to route around each clip in the correct way
+                Can add in the bungee style clips and have the gripper go through them
+
+        Execute this motion with a single arm (no dual arm needed for the task)
+    """
 
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
+    print(env.board.get_clips())
+    env.board.visualize_board(env.workspace_img)
 
-    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
-
-    arm = "right"
-
-    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
-        path_in_pixels, cable_orientations, "left"
-    )
-
-    env.robot.grippers_move_to("left", distance=3)
-    delta = "left"
-    env.robot.go_delta(
-        left_delta=[0, 0, 0.05] if delta == "left" else None,
-        right_delta=[0, 0, 0.05] if delta == "right" else None,
-    )
-
-    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
-
-    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
-        path_in_pixels, cable_orientations, arm
-    )
-
-    seq = ["right", "up", "up", "left"]  #  "left", "down", "right", "up", "left"]
-
-    env.slideto_cable_node(
-        path_in_pixels,
-        path_in_world,
-        cable_orientations,
-        idx,
-        arm=arm,
-        side="right",
-        display=False,
-    )
-
-    env.slideto_cable_node(
-        path_in_pixels,
-        path_in_world,
-        cable_orientations,
-        idx,
-        arm=arm,
-        side="up",
-        display=False,
-    )
-    env.robot.go_delta(
-        left_delta=[0, 0.05, 0.0] if delta == "left" else None,
-        right_delta=[0, 0.0, 0.0] if delta == "right" else None,
-    )
-
-    env.slideto_cable_node(
-        path_in_pixels,
-        path_in_world,
-        cable_orientations,
-        idx,
-        arm=arm,
-        side="down",
-        display=False,
-    )
-
-    env.slideto_cable_node(
-        path_in_pixels,
-        path_in_world,
-        cable_orientations,
-        idx,
-        arm=arm,
-        side="left",
-        display=False,
-    )
-
-    other_arm = "left" if env.cable_in_arm == "right" else "right"
-
-    # grasp_in_pixels, grasp_in_world, idx = env.release_cable_node(
-    #     path_in_pixels, cable_orientations, other_arm
+    # path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
+    #     display=True
     # )
+
+    arm = "right"  # do all manipulation with the right arm
+
+    desired_routing = ["B", "K", "J"]
+    print(env.route_around_clip("E", "G", "F"))
+    # rospy.init_node("pick_nic")
+    # env = ExperimentEnv(args)
+
+    # path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
+
+    # arm = "right"
 
     # grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
-    #     path_in_pixels, cable_orientations, other_arm
+    #     path_in_pixels, cable_orientations, "left"
     # )
 
-    # Safe quit.
-    env.robot.go_delta(
-        left_delta=[0, 0, 0.1] if env.cable_in_arm == "left" else None,
-        right_delta=[0, 0, 0.05] if env.cable_in_arm == "right" else None,
-    )
-    env.robot.move_to_home()
+    # env.robot.grippers_move_to("left", distance=3)
+    # delta = "left"
+    # env.robot.go_delta(
+    #     left_delta=[0, 0, 0.05] if delta == "left" else None,
+    #     right_delta=[0, 0, 0.05] if delta == "right" else None,
+    # )
+
+    # path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
+
+    # grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
+    #     path_in_pixels, cable_orientations, arm
+    # )
+
+    # seq = ["right", "up", "up", "left"]  #  "left", "down", "right", "up", "left"]
+
+    # env.slideto_cable_node(
+    #     path_in_pixels,
+    #     path_in_world,
+    #     cable_orientations,
+    #     idx,
+    #     arm=arm,
+    #     side="right",
+    #     display=False,
+    # )
+
+    # env.slideto_cable_node(
+    #     path_in_pixels,
+    #     path_in_world,
+    #     cable_orientations,
+    #     idx,
+    #     arm=arm,
+    #     side="up",
+    #     display=False,
+    # )
+    # env.robot.go_delta(
+    #     left_delta=[0, 0.05, 0.0] if delta == "left" else None,
+    #     right_delta=[0, 0.0, 0.0] if delta == "right" else None,
+    # )
+
+    # env.slideto_cable_node(
+    #     path_in_pixels,
+    #     path_in_world,
+    #     cable_orientations,
+    #     idx,
+    #     arm=arm,
+    #     side="down",
+    #     display=False,
+    # )
+
+    # env.slideto_cable_node(
+    #     path_in_pixels,
+    #     path_in_world,
+    #     cable_orientations,
+    #     idx,
+    #     arm=arm,
+    #     side="left",
+    #     display=False,
+    # )
+
+    # other_arm = "left" if env.cable_in_arm == "right" else "right"
+
+    # # grasp_in_pixels, grasp_in_world, idx = env.release_cable_node(
+    # #     path_in_pixels, cable_orientations, other_arm
+    # # )
+
+    # # grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
+    # #     path_in_pixels, cable_orientations, other_arm
+    # # )
+
+    # # Safe quit.
+    # env.robot.go_delta(
+    #     left_delta=[0, 0, 0.1] if env.cable_in_arm == "left" else None,
+    #     right_delta=[0, 0, 0.05] if env.cable_in_arm == "right" else None,
+    # )
+    # env.robot.move_to_home()
 
 
 if __name__ == "__main__":

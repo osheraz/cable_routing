@@ -1,4 +1,5 @@
 from math import e
+from huggingface_hub import whoami
 import rospy
 import numpy as np
 import cv2
@@ -617,6 +618,65 @@ class ExperimentEnv:
             right_pose=(poses[-1] if arm == "right" else None),
         )
 
+    def route_around_clip(
+        self,
+        prev_clip_id: str,
+        curr_clip_id: str,
+        next_clip_id: str,
+    ):
+        clips = self.board.get_clips()
+        curr_clip = clips[curr_clip_id]
+        prev_clip = clips[prev_clip_id]
+        next_clip = clips[next_clip_id]
+
+        curr_x, curr_y = curr_clip["x"], curr_clip["y"]
+        prev_x, prev_y = prev_clip["x"], prev_clip["y"]
+        next_x, next_y = next_clip["x"], next_clip["y"]
+        """
+            logic for how to route around a desired clip, want to move in the direction that will set up the next clip to be good
+        """
+        # sequence of left, right, up, down for a specific clip
+
+        def calculate_sequence():
+            """
+            returns the sequence of left, right, up, down to use for the motion based on the previous and next clip positions
+            """
+
+            num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
+            dir2num = {val: key for key, val in num2dir.items()}
+
+            prev2curr = [curr_x - prev_x, curr_y - prev_y, 0]
+            curr2next = [next_x - curr_x, next_y - curr_y, 0]
+
+            is_clockwise = np.cross(prev2curr, curr2next)[-1] < 0
+
+            if abs(prev2curr[0]) > abs(prev2curr[1]):
+                if prev2curr[0] > 0:
+                    middle_node = dir2num["right"]
+                else:
+                    middle_node = dir2num["left"]
+            else:
+                if prev2curr[1] > 0:
+                    middle_node = dir2num["down"]
+                else:
+                    middle_node = dir2num["up"]
+
+            if is_clockwise:
+                sequence = [
+                    num2dir[(middle_node + 1) % 4],
+                    num2dir[middle_node],
+                    num2dir[(middle_node - 1) % 4],
+                ]
+            else:
+                sequence = [
+                    num2dir[(middle_node - 1) % 4],
+                    num2dir[middle_node],
+                    num2dir[(middle_node + 1) % 4],
+                ]
+            return sequence
+
+        return calculate_sequence()
+
     def slideto_cable_node(
         self,
         cable_path_in_pixel,
@@ -640,7 +700,7 @@ class ExperimentEnv:
         # TODO: clean implementation
         p1, p2 = self.board.point1, self.board.point2
 
-        clips = self.board.get_clips().copy()
+        clips = list(self.board.get_clips().values())
         for clip in clips:
             clip["x"] -= p1[0]
             clip["y"] -= p1[1]
