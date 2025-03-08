@@ -650,6 +650,23 @@ class ExperimentEnv:
 
             is_clockwise = np.cross(prev2curr, curr2next)[-1] < 0
 
+            if curr_clip["type"] == 3:
+                required_dir = num2dir[(curr_clip["orientation"] // 90 + 1) % 4]
+                # if the clip has directionality, you must pass through the correct direction at some point in the sequence
+
+                # angle between the two vectors must also be greater than 180
+                unit_prev2curr = prev2curr / np.linalg.norm(prev2curr)
+                unit_curr2next = curr2next / np.linalg.norm(curr2next)
+                angle = np.arccos(
+                    np.clip(np.dot(unit_prev2curr, unit_curr2next), -1.0, 1.0)
+                )
+                if angle < 180:
+                    raise Exception(
+                        f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+                    )
+            else:
+                required_dir = None
+
             if abs(prev2curr[0]) > abs(prev2curr[1]):
                 if prev2curr[0] > 0:
                     middle_node = dir2num["right"]
@@ -673,6 +690,11 @@ class ExperimentEnv:
                     num2dir[middle_node],
                     num2dir[(middle_node + 1) % 4],
                 ]
+
+            if required_dir and required_dir not in sequence:
+                raise Exception(
+                    f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+                )
             return sequence
 
         return calculate_sequence()

@@ -1,7 +1,9 @@
+from tracemalloc import start
 import rospy
 import tyro
 from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.env import ExperimentEnv
+from cable_routing.env.ext_camera.utils.img_utils import distance
 
 
 def main(args: ExperimentConfig):
@@ -23,20 +25,33 @@ def main(args: ExperimentConfig):
 
         Execute this motion with a single arm (no dual arm needed for the task)
     """
-
+    MIN_DIST = 0.07  # minimum distance from a clip when doing the first grasp (in m)
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
+    clips = env.board.get_clips()
     print(env.board.get_clips())
     env.board.visualize_board(env.workspace_img)
+    desired_routing = ["B", "K", "J"]
 
-    # path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
-    #     display=True
-    # )
+    start_clip, end_clip = clips[desired_routing[0]], clips[desired_routing[1]]
+
+    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
+        start_points=[start_clip["x"], start_clip["y"]], display=True
+    )
+
+    initial_grasp_idx = -1
+    curr_dist = 0
+    while curr_dist < MIN_DIST:
+        initial_grasp_idx += 1
+        curr_dist = distance(
+            path_in_world[initial_grasp_idx], [start_clip["x"], start_clip["y"]]
+        )
+
+    initial_grasp_pixel = path_in_pixels[initial_grasp_idx]
 
     arm = "right"  # do all manipulation with the right arm
 
-    desired_routing = ["B", "K", "J"]
-    print(env.route_around_clip("E", "G", "F"))
+    print(env.route_around_clip("B", "I", "A"))
     # rospy.init_node("pick_nic")
     # env = ExperimentEnv(args)
 
