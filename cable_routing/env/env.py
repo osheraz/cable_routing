@@ -27,6 +27,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     find_nearest_point,
     get_perpendicular_orientation,
     get_path_angle,
+    distance,
 )  # TODO: Split to env_utils, img_utils etc..
 from cable_routing.env.ext_camera.utils.pcl_utils import project_points_to_image
 from cable_routing.handloom.handloom_pipeline.tracer import (
@@ -99,7 +100,7 @@ class ExperimentEnv:
         clips = self.board.get_clips()
 
         abort = False
-        for clip in clips:
+        for id, clip in clips.items():
 
             if not abort:
                 clip_type = clip["type"]
@@ -191,13 +192,21 @@ class ExperimentEnv:
         return world_path
 
     def grasp_cable_node(
-        self, path, cable_orientations, arm=None, single_hand=True, display=False
+        self,
+        path,
+        cable_orientations,
+        idx=None,
+        arm=None,
+        single_hand=True,
+        display=False,
     ):
 
-        frame = self.zed_cam.get_rgb()
-
-        move_to_pixel = pick_target_on_path(frame, path)
-        move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
+        if idx is None:
+            frame = self.zed_cam.get_rgb()
+            move_to_pixel = pick_target_on_path(frame, path)
+            move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
+        else:
+            move_to_pixel = path[idx]
 
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel,
@@ -247,6 +256,31 @@ class ExperimentEnv:
             plt.axis("equal")
             plt.grid(True)
             plt.show()
+
+            current_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
+            #
+            to_pixel = project_points_to_image(
+                np.array([current_pose.translation]),
+                self.zed_cam.intrinsic._K,
+                self.T_CAM_BASE,
+                self.workspace_img.shape[:2],
+            )[0]
+
+            img_to_display = self.workspace_img.copy()
+            cv2.circle(
+                img_to_display, (to_pixel[0], to_pixel[1]), 10, (255, 255, 255), -1
+            )
+
+            cv2.circle(
+                img_to_display,
+                (move_to_pixel[0], move_to_pixel[1]),
+                15,
+                (0, 255, 255),
+                -1,
+            )
+
+            cv2.imshow("kavish", img_to_display)
+            cv2.waitKey(0)
 
         if single_hand:
 
@@ -399,11 +433,13 @@ class ExperimentEnv:
         self.robot.single_hand_move(arm, target_coord, slow_mode=True)
 
     def plan_slide_to_cable_node(
-        self, path_in_pixel, idx, arm=None, side="up", display=True
+        self, path_in_pixel, idx, clip_id=None, arm=None, side="up", display=True
     ):
-
-        move_to_pixel = select_target_point(self.workspace_img, rule="clip")
-        clip = self.board.find_nearest_clip([move_to_pixel])
+        if clip_id is None:
+            move_to_pixel = select_target_point(self.workspace_img, rule="clip")
+            clip = self.board.get_clips()[self.board.find_nearest_clip([move_to_pixel])]
+        else:
+            clip = self.board.get_clips()[clip_id]
         clip_pixel = [clip["x"], clip["y"]]
 
         world_coord = get_world_coord_from_pixel_coord(
@@ -414,10 +450,10 @@ class ExperimentEnv:
         )
 
         pixel_offset = {
-            "left": [-60, 0],  # must be higher than inflation_radius
-            "right": [60, 0],
-            "down": [0, 60],
-            "up": [0, -60],
+            "left": [-80, 0],  # must be higher than inflation_radius
+            "right": [80, 0],
+            "down": [0, 80],
+            "up": [0, -80],
         }[side]
 
         goal_pixel = np.array(clip_pixel) + np.array(pixel_offset)
@@ -429,7 +465,7 @@ class ExperimentEnv:
             is_clip=True,
         )
 
-        start_pixel = path_in_pixel[idx]
+        # start_pixel = path_in_pixel[idx]
         current_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
         #
         start_pixel = project_points_to_image(
@@ -439,13 +475,14 @@ class ExperimentEnv:
             self.workspace_img.shape[:2],
         )[0]
         # start_pixel = select_target_point(self.workspace_img, rule="START START")
-        # start_pixel[0] -= self.point1[0]
-        # start_pixel[1] -= self.point1[1]
+        # start_pixel[0] -= self.board.point1[0]
+        # start_pixel[1] -= self.board.point1[1]
 
         waypoints_in_pixels = self.planner.plan_path(
             start_pixel=start_pixel,  # start_pixel,
             goal_pixel=goal_pixel,  #  move_to_pixel - directly to the point
         )
+        print(f"waypoints {waypoints_in_pixels}")
         waypoints = self.convert_path_to_world_coord(waypoints_in_pixels)
 
         if display:
@@ -587,7 +624,7 @@ class ExperimentEnv:
             ),
             RigidTransform(
                 translation=waypoints[0],
-                rotation=RigidTransform.x_axis_rotation(np.pi)
+                rotation=RigidTransform.x_axis_rotation(-np.pi)
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
@@ -597,7 +634,7 @@ class ExperimentEnv:
         poses = [
             RigidTransform(
                 translation=wp,
-                rotation=RigidTransform.x_axis_rotation(np.pi)
+                rotation=RigidTransform.x_axis_rotation(-np.pi)
                 @ RigidTransform.z_axis_rotation(-ori),
             )
             for wp, ori in zip(waypoints, eef_orientations)
@@ -618,11 +655,65 @@ class ExperimentEnv:
             right_pose=(poses[-1] if arm == "right" else None),
         )
 
+    def route_cable(self, routing: list, arm="right", display=False):
+        """
+        routing is a list of the clips in order
+
+        first need to find the cable and grasp it
+        then go through each of the clips and route to that clip
+        """
+        MIN_DIST = 0.7
+        clips = self.board.get_clips()
+        start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
+
+        path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
+            display=False,
+            # start_points=[start_clip["x"], start_clip["y"]],
+        )
+
+        # initial_grasp_idx = -1
+        # # curr_dist = flo
+        # while curr_dist > MIN_DIST:
+        #     initial_grasp_idx += 1
+        #     curr_dist = distance(
+        #         path_in_world[initial_grasp_idx], [start_clip["x"], start_clip["y"]]
+        #     )
+        #     print("curr dist", curr_dist)
+        #     print("clip pose", [start_clip["x"], start_clip["y"]])
+        #     print("loc in path", path_in_world[initial_grasp_idx])
+
+        pixel_coord, world_coord, initial_grasp_idx = self.grasp_cable_node(
+            path_in_pixels,
+            cable_orientations,
+            arm="right",  # idx=initial_grasp_idx
+            display=True,
+        )
+        print(f"initial grasp index {initial_grasp_idx}")
+
+        for i in range(1, len(routing) - 1):
+            self.route_around_clip(
+                routing[i - 1],
+                routing[i],
+                routing[i + 1],
+                path_in_pixels,
+                cable_orientations,
+                initial_grasp_idx,
+                arm=arm,
+                display=display,
+            )
+        pass
+
     def route_around_clip(
         self,
         prev_clip_id: str,
         curr_clip_id: str,
         next_clip_id: str,
+        path_in_pixels,
+        # path_in_world,
+        cable_orientations,
+        idx,
+        arm="right",
+        display=False,
     ):
         clips = self.board.get_clips()
         curr_clip = clips[curr_clip_id]
@@ -697,21 +788,38 @@ class ExperimentEnv:
                 )
             return sequence
 
+        sequence = calculate_sequence()
+        for s in sequence:
+            self.slideto_cable_node(
+                path_in_pixels,
+                cable_orientations,
+                idx,
+                clip_id=curr_clip_id,
+                arm=arm,
+                side=s,
+                display=display,
+            )
         return calculate_sequence()
 
     def slideto_cable_node(
         self,
         cable_path_in_pixel,
-        path_in_world,
+        # path_in_world,
         cable_orientations,
         idx,
+        clip_id=None,
         arm=None,
         side="up",
         single_hand=True,
         display=False,
     ):
         plan = self.plan_slide_to_cable_node(
-            cable_path_in_pixel, idx, arm=arm, side=side, display=display
+            cable_path_in_pixel,
+            idx,
+            clip_id=clip_id,
+            arm=arm,
+            side=side,
+            display=display,
         )
         self.execute_slide_to_cable_node(
             plan["waypoints"], plan["target_coord"], cable_orientations, arm=arm
@@ -734,9 +842,15 @@ class ExperimentEnv:
 
         if start_points == None:
             start_points = select_target_point(img, rule="start")
+        else:
+            start_points[0] -= p1[0]
+            start_points[1] -= p1[1]
 
-        if end_points == None:
-            end_points = select_target_point(img, rule="end")
+        print("Start points")
+        print(start_points)
+
+        # if end_points == None:
+        # end_points = select_target_point(img, rule="end")
 
         # TODO: fix!
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

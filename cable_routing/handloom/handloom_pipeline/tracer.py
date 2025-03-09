@@ -572,9 +572,10 @@ class Tracer:
                         (0, 0, 255),
                         2,
                     )
-                    cv2.circle(
-                        disp_img, tuple(endpoints[0][::-1]), 10, (0, 255, 255), -1
-                    )
+                    if endpoints is not None:
+                        cv2.circle(
+                            disp_img, tuple(endpoints[0][::-1]), 10, (0, 255, 255), -1
+                        )
                     cv2.circle(
                         disp_img, tuple(start_points[0][::-1]), 10, (255, 0, 255), -1
                     )

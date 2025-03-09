@@ -18,7 +18,7 @@ class YuMiRobotEnv:
         self.interface = Interface(speed=speed)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
-        self.gripper_opening = 2
+        self.gripper_opening = 4
         self.interface.calibrate_grippers()
         self.move_to_home()
         self.open_grippers()
@@ -54,7 +54,7 @@ class YuMiRobotEnv:
     def open_grippers(self, side: Literal["both", "left", "right"] = "both"):
         """Closes both grippers."""
         # self.interface.open_grippers(side)
-        self.grippers_move_to(side, distance=10)
+        self.grippers_move_to(side, distance=15)
 
     def grippers_move_to(self, hand: Literal["left", "right", "both"], distance: int):
         """
@@ -298,7 +298,7 @@ class YuMiRobotEnv:
         self.open_grippers(arm)
         print(f"Moving {arm} arm to the target position.")
         # Move above the target
-        rot = RigidTransform.x_axis_rotation(np.pi) @ RigidTransform.z_axis_rotation(
+        rot = RigidTransform.x_axis_rotation(-np.pi) @ RigidTransform.z_axis_rotation(
             -eef_rot
         )  # TODO why -?
 
@@ -310,7 +310,6 @@ class YuMiRobotEnv:
             left_pose=target_pose if arm == "left" else None,
             right_pose=target_pose if arm == "right" else None,
         )
-
         # Move down in two steps for a smooth approach
         for _ in range(2):
             target_pose.translation[2] -= 0.05

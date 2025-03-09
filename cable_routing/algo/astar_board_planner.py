@@ -12,9 +12,9 @@ class BoardPlanner:
     def __init__(
         self,
         config_path=None,
-        resolution=15.0,
-        robot_radius=15.0,
-        inflation_radius=40.0,
+        resolution=30.0,
+        robot_radius=30.0,
+        inflation_radius=30.0,
         show_animation=False,
     ):
         self.show_animation = show_animation

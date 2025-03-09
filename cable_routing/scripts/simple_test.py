@@ -28,30 +28,43 @@ def main(args: ExperimentConfig):
     MIN_DIST = 0.07  # minimum distance from a clip when doing the first grasp (in m)
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
-    clips = env.board.get_clips()
-    print(env.board.get_clips())
-    env.board.visualize_board(env.workspace_img)
-    desired_routing = ["B", "K", "J"]
 
-    start_clip, end_clip = clips[desired_routing[0]], clips[desired_routing[1]]
+    routing = ["E", "J", "K", "C"]
+    env.route_cable(routing, display=True)
+    exit()
+    # clips = env.board.get_clips()
+    # print(env.board.get_clips())
+    # # env.board.visualize_board(env.workspace_img)
+    # desired_routing = ["E", "K", "C"]
 
-    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
-        start_points=[start_clip["x"], start_clip["y"]], display=True
-    )
+    # start_clip, end_clip = clips[desired_routing[0]], clips[desired_routing[-1]]
 
-    initial_grasp_idx = -1
-    curr_dist = 0
-    while curr_dist < MIN_DIST:
-        initial_grasp_idx += 1
-        curr_dist = distance(
-            path_in_world[initial_grasp_idx], [start_clip["x"], start_clip["y"]]
-        )
+    # path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
+    #     display=False,
+    #     # start_points=[start_clip["x"], start_clip["y"]],
+    # )
 
-    initial_grasp_pixel = path_in_pixels[initial_grasp_idx]
+    # initial_grasp_idx = -1
+    # curr_dist = 0
+    # while curr_dist < MIN_DIST:
+    #     initial_grasp_idx += 1
+    #     curr_dist = distance(
+    #         path_in_world[initial_grasp_idx], [start_clip["x"], start_clip["y"]]
+    #     )
 
-    arm = "right"  # do all manipulation with the right arm
+    # _, _, idx = env.grasp_cable_node(
+    #     path_in_pixels,
+    #     cable_orientations,
+    #     arm="right",
+    # )
 
-    print(env.route_around_clip("B", "I", "A"))
+    # env.slideto_cable_node(
+    #     path_in_pixels, cable_orientations, idx, arm="right", display=True
+    # )
+
+    # arm = "right"  # do all manipulation with the right arm
+
+    # print(env.rosute_around_clip("B", "I", "A"))
     # rospy.init_node("pick_nic")
     # env = ExperimentEnv(args)
 

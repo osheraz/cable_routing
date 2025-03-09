@@ -34,7 +34,8 @@ class CableTracer:
 
         start_pixels = np.array(start_points)[::-1]  # TODO: To y-x
 
-        end_points = [np.array(end_points)[::-1]]
+        if end_points is not None:
+            end_points = [np.array(end_points)[::-1]]
 
         img_cp = img.copy()
 

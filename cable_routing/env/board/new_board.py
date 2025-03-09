@@ -83,7 +83,7 @@ class Board:
     def find_nearest_clip(self, path):
 
         # TODO: SOMETHING IS MODIFYING GET CLIPS
-        clips = self.load_board_config()  # self.get_clips()
+        clips = self.get_clips()  # self.get_clips()
 
         # for clip in clips:
         #     clip["x"] -= self.point1[0]
@@ -94,7 +94,7 @@ class Board:
         nearest_clip = min(
             clips,
             key=lambda clip: np.linalg.norm(
-                np.array([clip["x"], clip["y"]]) - last_point
+                np.array([clips[clip]["x"], clips[clip]["y"]]) - last_point
             ),
         )
 
