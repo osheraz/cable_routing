@@ -54,9 +54,14 @@ class ExperimentEnv:
             rospy.sleep(0.1)
             rospy.loginfo("Waiting for images from ZED camera...")
 
-        self.T_CAM_BASE = RigidTransform.load(
-            exp_config.cam_to_robot_trans_path
-        ).as_frames(from_frame="zed", to_frame="base_link")
+        self.T_CAM_BASE = {
+            "left": RigidTransform.load(
+                exp_config.cam_to_robot_left_trans_path
+            ).as_frames(from_frame="zed", to_frame="base_link"),
+            "right": RigidTransform.load(
+                exp_config.cam_to_robot_right_trans_path
+            ).as_frames(from_frame="zed", to_frame="base_link"),
+        }
 
         self.tracer = CableTracer()
         self.planner = BoardPlanner(show_animation=False)
@@ -76,9 +81,9 @@ class ExperimentEnv:
         # TODO: move all plots to vis_utils
         ######################################################
 
-    def get_extrinsic(self):
+    def get_extrinsic(self, arm="right"):
 
-        return self.T_CAM_BASE
+        return self.T_CAM_BASE["right"]
 
     def set_board_region(self, img=None):
 
@@ -89,7 +94,7 @@ class ExperimentEnv:
 
         # print(self.point1, self.point2)
 
-    def check_calibration(self):
+    def check_calibration(self, arm="right"):
         """we are going to poke all the clips/plugs etc"""
 
         # TODO - above board
@@ -107,7 +112,10 @@ class ExperimentEnv:
                 clip_ori = clip["orientation"]
                 pixel_coord = (clip["x"], clip["y"])
                 world_coord = get_world_coord_from_pixel_coord(
-                    pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE, is_clip=True
+                    pixel_coord,
+                    self.zed_cam.intrinsic,
+                    self.T_CAM_BASE[arm],
+                    is_clip=True,
                 )
 
                 print(
@@ -115,7 +123,6 @@ class ExperimentEnv:
                 )
 
                 # TODO add support for ori
-                arm = "right" if world_coord[1] < 0 else "left"
                 self.robot.single_hand_grasp(
                     arm, world_coord, eef_rot=np.deg2rad(clip_ori), slow_mode=True
                 )
@@ -124,15 +131,18 @@ class ExperimentEnv:
 
                 # abort = input("Abort? (y/n): ") == "y"
 
-    def update_cable_path(self, start_points=None, end_points=None, display=False):
+    def update_cable_path(
+        self, arm="right", start_points=None, end_points=None, display=False
+    ):
 
+        # TODO convert_path_to_world_coord is w.r.t the right arm!!! fix
         path_in_pixels, _ = self.trace_cable(
             start_points=start_points, end_points=end_points, viz=display
         )
 
         self.board.set_cable_path(path_in_pixels)
 
-        path_in_world = self.convert_path_to_world_coord(path_in_pixels)
+        path_in_world = self.convert_path_to_world_coord(path_in_pixels, arm=arm)
 
         cable_orientations = [
             get_perpendicular_orientation(
@@ -180,12 +190,12 @@ class ExperimentEnv:
 
         return path_in_pixels, path_in_world, cable_orientations
 
-    def convert_path_to_world_coord(self, path):
+    def convert_path_to_world_coord(self, path, arm="right"):
 
         world_path = []
         for pixel_coord in path:
             world_coord = get_world_coord_from_pixel_coord(
-                pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE
+                pixel_coord, self.zed_cam.intrinsic, self.T_CAM_BASE[arm]
             )
             world_path.append(world_coord)
 
@@ -195,8 +205,8 @@ class ExperimentEnv:
         self,
         path,
         cable_orientations,
+        arm,
         idx=None,
-        arm=None,
         single_hand=True,
         display=False,
     ):
@@ -211,7 +221,7 @@ class ExperimentEnv:
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel,
             self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
+            self.T_CAM_BASE[arm],
             # depth_map=self.zed_cam.get_depth(),
         )
 
@@ -257,30 +267,30 @@ class ExperimentEnv:
             plt.grid(True)
             plt.show()
 
-            current_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
-            #
-            to_pixel = project_points_to_image(
-                np.array([current_pose.translation]),
-                self.zed_cam.intrinsic._K,
-                self.T_CAM_BASE,
-                self.workspace_img.shape[:2],
-            )[0]
+            # current_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
+            # #
+            # to_pixel = project_points_to_image(
+            #     np.array([current_pose.translation]),
+            #     self.zed_cam.intrinsic._K,
+            #     self.T_CAM_BASE[arm],
+            #     self.workspace_img.shape[:2],
+            # )[0]
 
-            img_to_display = self.workspace_img.copy()
-            cv2.circle(
-                img_to_display, (to_pixel[0], to_pixel[1]), 10, (255, 255, 255), -1
-            )
+            # img_to_display = self.workspace_img.copy()
+            # cv2.circle(
+            #     img_to_display, (to_pixel[0], to_pixel[1]), 10, (255, 255, 255), -1
+            # )
 
-            cv2.circle(
-                img_to_display,
-                (move_to_pixel[0], move_to_pixel[1]),
-                15,
-                (0, 255, 255),
-                -1,
-            )
+            # cv2.circle(
+            #     img_to_display,
+            #     (move_to_pixel[0], move_to_pixel[1]),
+            #     15,
+            #     (0, 255, 255),
+            #     -1,
+            # )
 
-            cv2.imshow("kavish", img_to_display)
-            cv2.waitKey(0)
+            # cv2.imshow("kavish", img_to_display)
+            # cv2.waitKey(0)
 
         if single_hand:
 
@@ -312,7 +322,7 @@ class ExperimentEnv:
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel,
             self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
+            self.T_CAM_BASE[arm],
             depth_map=self.zed_cam.get_depth(),
         )
 
@@ -387,7 +397,7 @@ class ExperimentEnv:
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel,
             self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
+            self.T_CAM_BASE[arm],
             # depth_map=self.zed_cam.get_depth(),
             # is_clip=True,
         )
@@ -445,7 +455,7 @@ class ExperimentEnv:
         world_coord = get_world_coord_from_pixel_coord(
             clip_pixel,
             self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
+            self.T_CAM_BASE[arm],
             is_clip=True,
         )
 
@@ -461,7 +471,7 @@ class ExperimentEnv:
         target_coord = get_world_coord_from_pixel_coord(
             goal_pixel,
             self.zed_cam.intrinsic,
-            self.T_CAM_BASE,
+            self.T_CAM_BASE[arm],
             is_clip=True,
         )
 
@@ -471,7 +481,7 @@ class ExperimentEnv:
         start_pixel = project_points_to_image(
             np.array([current_pose.translation]),
             self.zed_cam.intrinsic._K,
-            self.T_CAM_BASE,
+            self.T_CAM_BASE[arm],
             self.workspace_img.shape[:2],
         )[0]
         # start_pixel = select_target_point(self.workspace_img, rule="START START")
@@ -666,12 +676,12 @@ class ExperimentEnv:
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
 
-        path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
-            display=False,
-            # start_points=[start_clip["x"], start_clip["y"]],
-        )
+        # path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
+        #     display=False,
+        #     # start_points=[start_clip["x"], start_clip["y"]],
+        # )
 
-        # initial_grasp_idx = -1
+        initial_grasp_idx = -1
         # # curr_dist = flo
         # while curr_dist > MIN_DIST:
         #     initial_grasp_idx += 1
@@ -682,24 +692,26 @@ class ExperimentEnv:
         #     print("clip pose", [start_clip["x"], start_clip["y"]])
         #     print("loc in path", path_in_world[initial_grasp_idx])
 
-        pixel_coord, world_coord, initial_grasp_idx = self.grasp_cable_node(
-            path_in_pixels,
-            cable_orientations,
-            arm="right",  # idx=initial_grasp_idx
-            display=True,
-        )
-        print(f"initial grasp index {initial_grasp_idx}")
+        # pixel_coord, world_coord, initial_grasp_idx = self.grasp_cable_node(
+        #     path_in_pixels,
+        #     cable_orientations,
+        #     arm="right",  # idx=initial_grasp_idx
+        #     display=True,
+        # )
+        # print(f"initial grasp index {initial_grasp_idx}")
 
         for i in range(1, len(routing) - 1):
-            self.route_around_clip(
-                routing[i - 1],
-                routing[i],
-                routing[i + 1],
-                path_in_pixels,
-                cable_orientations,
-                initial_grasp_idx,
-                arm=arm,
-                display=display,
+            print(
+                self.route_around_clip(
+                    routing[i - 1],
+                    routing[i],
+                    routing[i + 1],
+                    path_in_pixels=None,
+                    cable_orientations=None,
+                    idx=initial_grasp_idx,
+                    arm=arm,
+                    display=display,
+                )
             )
         pass
 
@@ -728,43 +740,58 @@ class ExperimentEnv:
         """
         # sequence of left, right, up, down for a specific clip
 
-        def calculate_sequence():
+        def normalize(vec):
+            return vec / np.linalg.norm(vec)
+
+        def calculate_sequence_2():
             """
-            returns the sequence of left, right, up, down to use for the motion based on the previous and next clip positions
+            hopefully this works better
             """
 
             num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
             dir2num = {val: key for key, val in num2dir.items()}
+            clip_vecs = np.array([[0, 1, 0], [1, 0, 0], [0, -1, 0], [-1, 0, 0]])
+            prev2curr = normalize(np.array([curr_x - prev_x, -(curr_y - prev_y), 0]))
+            curr2prev = -prev2curr
+            curr2next = normalize(np.array([next_x - curr_x, -(next_y - curr_y), 0]))
+            clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
+            is_clockwise = np.cross(prev2curr, curr2next)[-1] > 0
+            # fig, ax = plt.subplots()
+            # ax.quiver(
+            #     0,
+            #     0,
+            #     prev2curr[0],
+            #     prev2curr[1],
+            #     angles="xy",
+            #     scale_units="xy",
+            #     scale=1,
+            #     color="r",
+            #     label="v1",
+            # )
+            # ax.quiver(
+            #     0,
+            #     0,
+            #     curr2next[0],
+            #     curr2next[1],
+            #     angles="xy",
+            #     scale_units="xy",
+            #     scale=1,
+            #     color="b",
+            #     label="v2",
+            # )
+            # ax.grid()
+            # ax.legend()
 
-            prev2curr = [curr_x - prev_x, curr_y - prev_y, 0]
-            curr2next = [next_x - curr_x, next_y - curr_y, 0]
+            # plt.show()
 
-            is_clockwise = np.cross(prev2curr, curr2next)[-1] < 0
-
-            if curr_clip["type"] == 3:
-                required_dir = num2dir[(curr_clip["orientation"] // 90 + 1) % 4]
-                # if the clip has directionality, you must pass through the correct direction at some point in the sequence
-
-                # angle between the two vectors must also be greater than 180
-                unit_prev2curr = prev2curr / np.linalg.norm(prev2curr)
-                unit_curr2next = curr2next / np.linalg.norm(curr2next)
-                angle = np.arccos(
-                    np.clip(np.dot(unit_prev2curr, unit_curr2next), -1.0, 1.0)
-                )
-                if angle < 180:
-                    raise Exception(
-                        f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
-                    )
-            else:
-                required_dir = None
-
-            if abs(prev2curr[0]) > abs(prev2curr[1]):
-                if prev2curr[0] > 0:
-                    middle_node = dir2num["right"]
-                else:
+            net_vector = curr2prev + curr2next
+            if abs(net_vector[0]) > abs(net_vector[1]):
+                if net_vector[0] > 0:
                     middle_node = dir2num["left"]
+                else:
+                    middle_node = dir2num["right"]
             else:
-                if prev2curr[1] > 0:
+                if net_vector[1] > 0:
                     middle_node = dir2num["down"]
                 else:
                     middle_node = dir2num["up"]
@@ -782,24 +809,111 @@ class ExperimentEnv:
                     num2dir[(middle_node + 1) % 4],
                 ]
 
-            if required_dir and required_dir not in sequence:
-                raise Exception(
-                    f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
-                )
-            return sequence
+            # checking if this works for c-clips
+            if curr_clip["type"] == 3:
+                cross1 = np.cross(prev2curr, clip_vec)[-1]
+                cross2 = np.cross(prev2curr, curr2next)[-1]
+                if (cross1 < 0 and cross2 > 0) or (cross1 < 0 and cross2 > 0):
+                    raise Exception(
+                        f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+                    )
 
-        sequence = calculate_sequence()
-        for s in sequence:
-            self.slideto_cable_node(
-                path_in_pixels,
-                cable_orientations,
-                idx,
-                clip_id=curr_clip_id,
-                arm=arm,
-                side=s,
-                display=display,
-            )
-        return calculate_sequence()
+            print(sequence)
+
+        # def calculate_sequence():
+        #     """
+        #     returns the sequence of left, right, up, down to use for the motion based on the previous and next clip positions
+        #     """
+
+        #     num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
+        #     dir2num = {val: key for key, val in num2dir.items()}
+
+        #     prev2curr = np.array([curr_x - prev_x, -(curr_y - prev_y), 0])
+        #     curr2next = np.array([next_x - curr_x, -(next_y - curr_y), 0])
+
+        #     is_clockwise = np.cross(prev2curr, curr2next)[-1] < 0
+
+        #     clip_vecs = np.array([[0, -1, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0]])
+
+        #     if abs(prev2curr[0]) > abs(prev2curr[1]):
+        #         if prev2curr[0] > 0:
+        #             middle_node = dir2num["right"]
+        #         else:
+        #             middle_node = dir2num["left"]
+        #     else:
+        #         if prev2curr[1] > 0:
+        #             middle_node = dir2num["down"]
+        #         else:
+        #             middle_node = dir2num["up"]
+
+        #     clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
+
+        #     unit_prev2curr = prev2curr / np.linalg.norm(prev2curr)
+        #     unit_curr2next = curr2next / np.linalg.norm(curr2next)
+        #     angle1 = (
+        #         np.rad2deg(
+        #             np.arccos(np.clip(np.dot(-unit_prev2curr, clip_vec), -1.0, 1.0))
+        #         )
+        #         % 180
+        #     )
+        #     angle2 = (
+        #         np.rad2deg(
+        #             np.arccos(np.clip(np.dot(unit_curr2next, clip_vec), -1.0, 1.0))
+        #         )
+        #         % 180
+        #     )
+        #     # if the clip has directionality, you must pass through the correct direction at some point in the sequence
+        #     print(f"{angle1=}, {angle2=},")
+        #     # angle between the two vectors must also be greater than 180
+        #     angle = angle1 + angle2
+        #     is_acute = angle > 270
+
+        #     if curr_clip["type"] == 3:
+        #         required_num = (curr_clip["orientation"] // 90 + 1) % 4
+        #         print(f"{required_num=}")
+        #         required_dir = num2dir[required_num]
+        #         if angle < 180:
+        #             raise Exception(
+        #                 f"Plannning error: Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+        #             )
+        #     else:
+        #         required_dir = None
+
+        #     if is_clockwise:
+        #         sequence = [
+        #             num2dir[(middle_node + 1) % 4],
+        #             num2dir[middle_node],
+        #             num2dir[(middle_node - 1) % 4],
+        #         ]
+        #     else:
+        #         sequence = [
+        #             num2dir[(middle_node - 1) % 4],
+        #             num2dir[middle_node],
+        #             num2dir[(middle_node + 1) % 4],
+        #         ]
+
+        #     print(required_dir, sequence)
+        #     if required_dir and required_dir not in sequence:
+        #         raise Exception(
+        #             f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+        #         )
+        #     if is_acute:
+        #         return sequence
+        #     else:
+        #         return sequence[:-1]
+
+        sequence = calculate_sequence_2()
+        # for s in sequence:
+        #     self.slideto_cable_node(
+        #         path_in_pixels,
+        #         cable_orientations,
+        #         idx,
+        #         clip_id=curr_clip_id,
+        #         arm=arm,
+        #         side=s,
+        #         display=display,
+        #     )
+        return sequence
 
     def slideto_cable_node(
         self,
@@ -807,8 +921,8 @@ class ExperimentEnv:
         # path_in_world,
         cable_orientations,
         idx,
+        arm,
         clip_id=None,
-        arm=None,
         side="up",
         single_hand=True,
         display=False,

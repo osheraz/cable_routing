@@ -29,8 +29,8 @@ def main(args: ExperimentConfig):
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
 
-    routing = ["E", "J", "K", "C"]
-    env.route_cable(routing, display=True)
+    routing = ["F", "G", "D"]
+    print(env.route_cable(routing, display=True))
     exit()
     # clips = env.board.get_clips()
     # print(env.board.get_clips())

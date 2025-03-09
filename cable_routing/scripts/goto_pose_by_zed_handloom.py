@@ -17,7 +17,7 @@ def main(args: ExperimentConfig):
 
     path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
     grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
-        path_in_pixels, cable_orientations, display=True
+        path_in_pixels, cable_orientations, arm="right", display=False
     )
     env.robot.move_to_home()
 

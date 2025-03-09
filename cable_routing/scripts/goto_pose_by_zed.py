@@ -31,7 +31,7 @@ def main(args: ExperimentConfig):
     camera_info = rospy.wait_for_message("/zedm/zed_node/rgb/camera_info", CameraInfo)
 
     T_CAM_BASE = RigidTransform.load(
-        "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
+        "/home/osheraz/cable_routing/cable_routing/configs/cameras/zed_to_world_right.tf"
     ).as_frames(from_frame="zed", to_frame="base_link")
 
     CAM_INTR = CameraIntrinsics(
@@ -74,7 +74,9 @@ def main(args: ExperimentConfig):
     print("World Coordinate: ", world_coord)
 
     # input("Press Enter to apply...")
-    yumi.single_hand_grasp(world_coord, eef_rot=np.pi / 2, slow_mode=True)
+
+    arm = "right"  # if world_coord[1] < 0 else "left"
+    yumi.single_hand_grasp(arm, world_coord, eef_rot=np.pi / 2, slow_mode=True)
 
     # yumi.dual_hand_grasp(
     #     world_coord=world_coord,

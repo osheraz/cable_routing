@@ -101,8 +101,11 @@ class ExperimentConfig:
     robot_cfg: YuMiConfig
     board_cfg: EnvConfig
 
-    cam_to_robot_trans_path: str = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world.tf"
+    cam_to_robot_right_trans_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world_right.tf"
+    )
+    cam_to_robot_left_trans_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world_left.tf"
     )
     board_cfg_path: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "board/board_config.json"
