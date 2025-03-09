@@ -665,7 +665,7 @@ class ExperimentEnv:
             right_pose=(poses[-1] if arm == "right" else None),
         )
 
-    def route_cable(self, routing: list, arm="right", display=False):
+    def route_cable(self, routing: list, primary_arm="right", display=False, dual_arm=False):
         """
         routing is a list of the clips in order
 
@@ -676,10 +676,11 @@ class ExperimentEnv:
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
 
-        # path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
-        #     display=False,
-        #     # start_points=[start_clip["x"], start_clip["y"]],
-        # )
+        path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
+            display=False,
+            arm=primary_arm,
+            # start_points=[start_clip["x"], start_clip["y"]],
+        )
 
         initial_grasp_idx = -1
         # # curr_dist = flo
@@ -692,12 +693,15 @@ class ExperimentEnv:
         #     print("clip pose", [start_clip["x"], start_clip["y"]])
         #     print("loc in path", path_in_world[initial_grasp_idx])
 
-        # pixel_coord, world_coord, initial_grasp_idx = self.grasp_cable_node(
-        #     path_in_pixels,
-        #     cable_orientations,
-        #     arm="right",  # idx=initial_grasp_idx
-        #     display=True,
-        # )
+        primary_pixel_coord, primary_world_coord, main_initial_grasp_idx = self.grasp_cable_node(
+            path_in_pixels,
+            cable_orientations,
+            arm=primary_arm,  # idx=initial_grasp_idx
+            display=True,
+        )
+
+        if dual_arm:
+            _, _, secondary_initial_grasp_idx = self.grasp_cable_node(path_in_pixels, cable_orientations, arm=)
         # print(f"initial grasp index {initial_grasp_idx}")
 
         for i in range(1, len(routing) - 1):
@@ -713,6 +717,8 @@ class ExperimentEnv:
                     display=display,
                 )
             )
+        # finally just go to a pose above the final clip (x, y)
+        # self.robot.mo
         pass
 
     def route_around_clip(
@@ -756,33 +762,6 @@ class ExperimentEnv:
             curr2next = normalize(np.array([next_x - curr_x, -(next_y - curr_y), 0]))
             clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
             is_clockwise = np.cross(prev2curr, curr2next)[-1] > 0
-            # fig, ax = plt.subplots()
-            # ax.quiver(
-            #     0,
-            #     0,
-            #     prev2curr[0],
-            #     prev2curr[1],
-            #     angles="xy",
-            #     scale_units="xy",
-            #     scale=1,
-            #     color="r",
-            #     label="v1",
-            # )
-            # ax.quiver(
-            #     0,
-            #     0,
-            #     curr2next[0],
-            #     curr2next[1],
-            #     angles="xy",
-            #     scale_units="xy",
-            #     scale=1,
-            #     color="b",
-            #     label="v2",
-            # )
-            # ax.grid()
-            # ax.legend()
-
-            # plt.show()
 
             net_vector = curr2prev + curr2next
             if abs(net_vector[0]) > abs(net_vector[1]):
@@ -810,109 +789,27 @@ class ExperimentEnv:
                 ]
 
             # checking if this works for c-clips
-            if curr_clip["type"] == 3:
-                cross1 = np.cross(prev2curr, clip_vec)[-1]
-                cross2 = np.cross(prev2curr, curr2next)[-1]
-                if (cross1 < 0 and cross2 > 0) or (cross1 < 0 and cross2 > 0):
-                    raise Exception(
-                        f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
-                    )
-
+            # if curr_clip["type"] == 3:
+            #     cross1 = np.cross(prev2curr, clip_vec)[-1]
+            #     cross2 = np.cross(prev2curr, curr2next)[-1]
+            #     if (cross1 < 0 and cross2 > 0) or (cross1 < 0 and cross2 > 0):
+            #         raise Exception(
+            #             f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+            #         )
             print(sequence)
-
-        # def calculate_sequence():
-        #     """
-        #     returns the sequence of left, right, up, down to use for the motion based on the previous and next clip positions
-        #     """
-
-        #     num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
-        #     dir2num = {val: key for key, val in num2dir.items()}
-
-        #     prev2curr = np.array([curr_x - prev_x, -(curr_y - prev_y), 0])
-        #     curr2next = np.array([next_x - curr_x, -(next_y - curr_y), 0])
-
-        #     is_clockwise = np.cross(prev2curr, curr2next)[-1] < 0
-
-        #     clip_vecs = np.array([[0, -1, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0]])
-
-        #     if abs(prev2curr[0]) > abs(prev2curr[1]):
-        #         if prev2curr[0] > 0:
-        #             middle_node = dir2num["right"]
-        #         else:
-        #             middle_node = dir2num["left"]
-        #     else:
-        #         if prev2curr[1] > 0:
-        #             middle_node = dir2num["down"]
-        #         else:
-        #             middle_node = dir2num["up"]
-
-        #     clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
-
-        #     unit_prev2curr = prev2curr / np.linalg.norm(prev2curr)
-        #     unit_curr2next = curr2next / np.linalg.norm(curr2next)
-        #     angle1 = (
-        #         np.rad2deg(
-        #             np.arccos(np.clip(np.dot(-unit_prev2curr, clip_vec), -1.0, 1.0))
-        #         )
-        #         % 180
-        #     )
-        #     angle2 = (
-        #         np.rad2deg(
-        #             np.arccos(np.clip(np.dot(unit_curr2next, clip_vec), -1.0, 1.0))
-        #         )
-        #         % 180
-        #     )
-        #     # if the clip has directionality, you must pass through the correct direction at some point in the sequence
-        #     print(f"{angle1=}, {angle2=},")
-        #     # angle between the two vectors must also be greater than 180
-        #     angle = angle1 + angle2
-        #     is_acute = angle > 270
-
-        #     if curr_clip["type"] == 3:
-        #         required_num = (curr_clip["orientation"] // 90 + 1) % 4
-        #         print(f"{required_num=}")
-        #         required_dir = num2dir[required_num]
-        #         if angle < 180:
-        #             raise Exception(
-        #                 f"Plannning error: Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
-        #             )
-        #     else:
-        #         required_dir = None
-
-        #     if is_clockwise:
-        #         sequence = [
-        #             num2dir[(middle_node + 1) % 4],
-        #             num2dir[middle_node],
-        #             num2dir[(middle_node - 1) % 4],
-        #         ]
-        #     else:
-        #         sequence = [
-        #             num2dir[(middle_node - 1) % 4],
-        #             num2dir[middle_node],
-        #             num2dir[(middle_node + 1) % 4],
-        #         ]
-
-        #     print(required_dir, sequence)
-        #     if required_dir and required_dir not in sequence:
-        #         raise Exception(
-        #             f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
-        #         )
-        #     if is_acute:
-        #         return sequence
-        #     else:
-        #         return sequence[:-1]
+            return sequence
 
         sequence = calculate_sequence_2()
-        # for s in sequence:
-        #     self.slideto_cable_node(
-        #         path_in_pixels,
-        #         cable_orientations,
-        #         idx,
-        #         clip_id=curr_clip_id,
-        #         arm=arm,
-        #         side=s,
-        #         display=display,
-        #     )
+        for s in sequence:
+            self.slideto_cable_node(
+                path_in_pixels,
+                cable_orientations,
+                idx,
+                clip_id=curr_clip_id,
+                arm=arm,
+                side=s,
+                display=display,
+            )
         return sequence
 
     def slideto_cable_node(

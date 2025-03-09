@@ -46,7 +46,7 @@ class CableTracer:
         else:
             start_pixels = np.flip(last_path[-4:], axis=1)
 
-        if len(start_pixels) < 3:
+        if len(start_pixels) < 2:
             print("Failed analytical trace")
             return None
 
