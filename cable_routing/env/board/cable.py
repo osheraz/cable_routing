@@ -61,17 +61,17 @@ class Cable:
                         #     ) == point
                         # )
                         
-                        xdiff = true_point[0]-point[0]*self.grid_size[0]
-                        ydiff = true_point[1]-point[1]*self.grid_size[1]
+                        xdiff = true_point[0]-feature.get_true_coordinate()[0]
+                        ydiff = true_point[1]-feature.get_true_coordinate()[1]
                         direction = 0
                         if abs_value(xdiff) > abs_value(ydiff):
                             if xdiff < 0:
-                                direction = 2
+                                direction = 180
                         else:
                             if ydiff > 0:
-                                direction = 1
+                                direction = 270
                             else:
-                                direction = 3
+                                direction = 90
                         
                         point = (point[0], point[1], direction)
                         
@@ -112,10 +112,22 @@ class Cable:
         true_point = find_first(self.true_coordinates, lambda x: (
                                 int(round(x[0] / self.grid_size[0])),
                                 int(round(x[1] / self.grid_size[1])),
-                            ) == coord
+                            ) == (coord[0], coord[1])
                         )
 
         return true_point
+    
+    def intermediate_points(self, keypoint1, keypoint2, num_points=1):
+        index1 = self.true_coordinates.index(self.true_point(keypoint1))
+        index2 = self.true_coordinates.index(self.true_point(keypoint2))
+
+        # print(self.true_coordinates[index1:index2+1])
+
+        intermediate_indices = []
+        for i in range(num_points):
+            intermediate_indices.append((i+1)*(index2 - index1)//(num_points + 1) + index1)
+
+        return [self.true_coordinates[index] for index in intermediate_indices]
 
     # Appropriate getter functions
     def get_keypoints(self):

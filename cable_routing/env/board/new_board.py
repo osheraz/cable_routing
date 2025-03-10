@@ -159,8 +159,8 @@ class Board:
 
             self.draw_clip(
                 img_display,
-                clip.get_position()[0],
-                clip.get_position()[1],
+                clip.get_true_coordinate()[0],
+                clip.get_true_coordinate()[1],
                 clip.get_type(),
                 clip.get_orientation(),
             )
@@ -300,11 +300,11 @@ class BoardFeature:
     def get_position(self):
         return (self.coordinate[0], self.coordinate[1])
 
-    def get_tuple(self):
-        if self.type in ["Clip"]:
-            return self.coordinate
+    def get_true_coordinate(self):
+        if self.type in ["Clip", "6Pin"]:
+            return self.true_coordinate
         else:
-            return (self.coordinate[0], self.coordinate[1])
+            return (self.true_coordinate[0], self.true_coordinate[1])
         
     def get_type(self):
         return self.type
@@ -319,28 +319,28 @@ if __name__ == "__main__":
     config_path = cfg.board_cfg_path
     img_path = cfg.bg_img_path
 
-    board = Board(config_path=config_path, grid_size=(20, 20))
+    board = Board(config_path=config_path, grid_size=(20,20))
     img = cv2.imread(img_path)
 
 
-    goal_keypoints = [(708, 88), (827, 167), (974, 254), (886, 562), (1313, 562)]
-    cur_keypoints = [(701, 84), (974, 256), (829, 167), (1313, 559)]
+    goal_keypoints = [(657, 547), (825, 394), (886, 572), (1181, 240), (1309, 637)]
+    cur_keypoints = [(657, 547), (827, 157), (974, 274), (1181, 240), (1313, 562)]
 
     goal_sequence = []
-    num_steps = 5
+    num_steps = 10
     # Interpolate sequences:
     for k in range(len(goal_keypoints)-1):
         goal_sequence.append(goal_keypoints[k])
-        for l in range(num_steps):
-            goal_sequence.append((goal_keypoints[k][0] + (goal_keypoints[k+1][0] - goal_keypoints[k][0])//num_steps, goal_keypoints[k][1] + (goal_keypoints[k+1][1] - goal_keypoints[k][1])//num_steps))
+        for l in range(1, num_steps+1):
+            goal_sequence.append((goal_keypoints[k][0] + l*(goal_keypoints[k+1][0] - goal_keypoints[k][0])//num_steps, goal_keypoints[k][1] + l*(goal_keypoints[k+1][1] - goal_keypoints[k][1])//num_steps))
     goal_sequence.append(goal_keypoints[-1])
 
     cur_sequence = []
     # Interpolate sequences:
     for k in range(len(cur_keypoints)-1):
         cur_sequence.append(cur_keypoints[k])
-        for l in range(num_steps):
-            cur_sequence.append((cur_keypoints[k][0] + (cur_keypoints[k+1][0] - cur_keypoints[k][0])//num_steps, cur_keypoints[k][1] + (cur_keypoints[k+1][1] - cur_keypoints[k][1])//num_steps))
+        for l in range(1, num_steps+1):
+            cur_sequence.append((cur_keypoints[k][0] + l*(cur_keypoints[k+1][0] - cur_keypoints[k][0])//num_steps, cur_keypoints[k][1] + l*(cur_keypoints[k+1][1] - cur_keypoints[k][1])//num_steps))
 
     cur_sequence.append(cur_keypoints[-1])
 
@@ -362,11 +362,15 @@ if __name__ == "__main__":
     board.add_cable(goal_cable)
     board.add_cable(cur_cable)
 
+    # cur_cable.get_keypoints()[0]
+    print(cur_cable.intermediate_points(cur_cable.get_keypoints()[0], cur_cable.get_keypoints()[1], num_points=2))
+
     goal_config = {cur_cable.id: goal_cable}
 
     suggestion = suggest_modifications(
-        board, goal_configuration=goal_config, human_readable=False
+        board, goal_configuration=goal_config, human_readable=True
     )
     print(suggestion)
 
-    annotated_img = board.visualize_board(img, quantized=True)
+    annotated_img = board.visualize_board(img, quantized=False)
+    #annotated_img = board.visualize_board(img, quantized=True)

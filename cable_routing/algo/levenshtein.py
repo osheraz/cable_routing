@@ -26,7 +26,7 @@ def levenshtein_algo(given, desired, environment, human_readable=True):
     )  # (desired_coords[0]**2 + desired_coords[1]**2)//400 + 1
     remove_cost = lambda given_coords, board: 1
     swap_cost = (
-        lambda given_coords, desired_coords, board: 1
+        lambda given_coords, desired_coords, board: 100000
     )  # ((given_coords[0]-desired_coords[0])**2 + (given_coords[1]-desired_coords[1])**2)//100 + 1
 
     # Traverse the DP table to generate cost scores for all sequences of coordinates
@@ -89,8 +89,8 @@ def levenshtein_algo(given, desired, environment, human_readable=True):
 
     instructions = []
 
-    print(buildx)
-    print(buildy)
+    # print(buildx)
+    # print(buildy)
 
     if human_readable:
         for i in range(len(buildx)):
@@ -160,12 +160,17 @@ def levenshtein_algo(given, desired, environment, human_readable=True):
             elif buildy[i] == "Remove":
                 instructions.append(("Remove", to_pixel_space(buildx[i]), None, None))
             elif buildx[i] != buildy[i]:
-                instructions.append(("Swap", to_pixel_space(buildx[i]), to_pixel_space(buildy[i]), None))
+                if i == 0:
+                    prev_coord = None
+                else:
+                    prev_coord = buildx[i-1]
+
+                instructions.append(("Swap", to_pixel_space(buildx[i]), to_pixel_space(buildy[i]), prev_coord))
 
     return instructions
 
 
-def suggest_modifications(environment, goal_configuration, human_readable=True):
+def suggest_modifications(environment, goal_configuration, human_readable=False):
     """
     Given a goal cable configuration "goal_configuration", suggest the set of moves to produce that configuration given the board's current state.
 
@@ -178,6 +183,7 @@ def suggest_modifications(environment, goal_configuration, human_readable=True):
                     instructions (list[str, ...]): A list of verbal instructions to produce the goal configuration from the given board configuration
     """
 
+    cable_ids = []
     instructions = []
     for cable_id in goal_configuration:
         goal_cable = goal_configuration[cable_id]
@@ -192,10 +198,49 @@ def suggest_modifications(environment, goal_configuration, human_readable=True):
                     human_readable=human_readable,
                 )
             )
+            cable_ids.append(cable_id)
         else:
             instructions.append(f"Missing cable {cable_id}")
 
+    if human_readable:
+        return instructions
+    else :
+        pick_place = []
+        for cable_num in range(len(instructions)):
+            cable = environment.get_cables()[cable_ids[cable_num]]
+            add_dictionary = {}
+            key = () # Keypoint for the last add operation we needed to do
+            to_add = []
+            for instruction in instructions[cable_num]:
+                if instruction[0] == "Add":
+                    keypoint1 = instruction[2] if instruction[2] != None else cable.true_coordinates[0]
+                    keypoint2 = instruction[3] if instruction[3] != None else cable.true_coordinates[-1]
+                    if (keypoint1, keypoint2) == key:
+                        to_add.append(instruction[1])
+                    else :
+                        if key != ():
+                            grasp_points = cable.intermediate_points((key[0][0]//cable.grid_size[0], key[0][1]//cable.grid_size[1]), (key[1][0]//cable.grid_size[0], key[1][1]//cable.grid_size[1]), num_points = len(to_add))
+                        for goal_index in range(len(to_add)):
+                            pick_place.append((grasp_points[goal_index], to_add[goal_index]))
+                        key = (keypoint1, keypoint2)
+                        to_add = [instruction[1]]
+
+
+                    # if (keypoint1, keypoint2) in add_dictionary:
+                    #     add_dictionary[(keypoint1, keypoint2)].append(instruction[1])
+                    # else:
+                    #     add_dictionary[(keypoint1, keypoint2)] = [instruction[1]]
+                elif instruction[0] == "Remove":
+                    # TODO: Can change output structure
+                    pick_place.append(((instruction[1][0], instruction[1][1]), (instruction[1][0]+10, instruction[1][1]+10)))
+                elif instruction[0] == "Swap":
+                    pick_place.append(((instruction[1][0], instruction[1][1]), instruction[2]))
+            
+            # for key in add_dictionary:
+            #     grasp_points = cable.intermediate_points((key[0][0]//cable.grid_size[0], key[0][1]//cable.grid_size[1]), (key[1][0]//cable.grid_size[0], key[1][1]//cable.grid_size[1]), num_points = len(add_dictionary[key]))
+            #     for goal_index in range(len(add_dictionary[key])):
+            #         pick_place.append((grasp_points[goal_index], add_dictionary[key][goal_index]))
+        return pick_place
+
     # for instruction in instructions:
     #     print(instruction)
-
-    return instructions
