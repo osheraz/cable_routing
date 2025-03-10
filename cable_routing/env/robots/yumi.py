@@ -26,22 +26,41 @@ class YuMiRobotEnv:
         # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
-    def move_to_home(self) -> None:
-        """Moves both arms to the home position."""
+    def move_to_home(self, arm=None) -> None:
+        """Moves the specified arm to the home position. If no arm is specified, moves both arms to home."""
         self.set_speed("normal")
+
         lz, rz = (
             self.get_ee_pose()[0].translation[2],
             self.get_ee_pose()[1].translation[2],
         )
-        if lz < 0.1 or rz < 0.1:
-            self.go_delta(
-                left_delta=(0, 0, 0.05 if lz < 0.1 else 0),
-                right_delta=(0, 0, 0.05 if rz < 0.1 else 0),
+
+        if arm is None:
+            if lz < 0.1 or rz < 0.1:
+                self.go_delta(
+                    left_delta=(0, 0, 0.05 if lz < 0.1 else 0),
+                    right_delta=(0, 0, 0.05 if rz < 0.1 else 0),
+                )
+            self.set_joint_positions(
+                left_positions=self.robot_config.LEFT_HOME_POS,
+                right_positions=self.robot_config.RIGHT_HOME_POS,
             )
-        self.set_joint_positions(
-            left_positions=self.robot_config.LEFT_HOME_POS,
-            right_positions=self.robot_config.RIGHT_HOME_POS,
-        )
+
+        elif arm == "left":
+            if lz < 0.1:
+                self.go_delta(left_delta=(0, 0, 0.05), right_delta=(0, 0, 0))
+            self.set_joint_positions(
+                left_positions=self.robot_config.LEFT_HOME_POS,
+                right_positions=None,
+            )
+
+        elif arm == "right":
+            if rz < 0.1:
+                self.go_delta(left_delta=(0, 0, 0), right_delta=(0, 0, 0.05))
+            self.set_joint_positions(
+                left_positions=None,
+                right_positions=self.robot_config.RIGHT_HOME_POS,
+            )
 
     def close_grippers(
         self, side: Literal["both", "left", "right"] = "both", wait: bool = False
@@ -53,8 +72,8 @@ class YuMiRobotEnv:
 
     def open_grippers(self, side: Literal["both", "left", "right"] = "both"):
         """Closes both grippers."""
-        # self.interface.open_grippers(side)
-        self.grippers_move_to(side, distance=15)
+        self.interface.open_grippers(side)
+        # self.grippers_move_to(side, distance=15)
 
     def grippers_move_to(self, hand: Literal["left", "right", "both"], distance: int):
         """
@@ -564,6 +583,8 @@ def main(args: ExperimentConfig):
 
     # Initialize the YuMi robot environment
     yumi_env = YuMiRobotEnv(args.robot_cfg)
+
+    print(yumi_env.get_joint_values())
     #     def single_hand_grasp(
     #     self,
     #     arm: Literal["left", "right"],
@@ -571,11 +592,11 @@ def main(args: ExperimentConfig):
     #     eef_rot: float = np.pi,
     #     slow_mode: bool = True,
     # ) -> None:
-    yumi_env.single_hand_grasp(
-        arm="right",
-        world_coord=[0.48742186, -0.09680866, 0.05],
-        eef_rot=+np.pi / 2,
-    )
+    # yumi_env.single_hand_grasp(
+    #     arm="right",
+    #     world_coord=[0.48742186, -0.09680866, 0.05],
+    #     eef_rot=+np.pi / 2,
+    # )
     # print("\n--- Initializing YuMi ---\n")
     # yumi_env.move_to_home()
     # yumi_env.open_grippers()
