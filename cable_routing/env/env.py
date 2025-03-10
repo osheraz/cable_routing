@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import datetime
 import os
+import random
 from scipy.spatial import KDTree
 from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
@@ -357,12 +358,12 @@ class ExperimentEnv:
         cable_ori_grasp = cable_orientations[idx]
 
         world_coord_follow = get_world_coord_from_pixel_coord(
-            move_to_pixel_follow,  # path[idx + X] << assume we can trace the cable
+            move_to_pixel_follow,
             self.zed_cam.intrinsic,
             self.T_CAM_BASE[follow_arm],
         )
 
-        cable_ori_follow = cable_orientations[idx]
+        cable_ori_follow = cable_orientations[next_idx]
 
         if display:
 
@@ -413,13 +414,31 @@ class ExperimentEnv:
             plt.grid(True)
             plt.show()
 
-        self.robot.single_hand_grasp(
-            grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
+        world_coords = {
+            "left": world_coord_follow if follow_arm == "left" else world_coord_grasp,
+            "right": world_coord_follow if follow_arm == "right" else world_coord_grasp,
+        }
+
+        eef_rots = {
+            "left": cable_ori_follow if follow_arm == "left" else cable_ori_grasp,
+            "right": cable_ori_follow if follow_arm == "right" else cable_ori_grasp,
+        }
+
+        # Call the function dynamically
+        self.robot.dual_hand_grasp(
+            left_world_coord=world_coords["left"],
+            left_eef_rot=eef_rots["left"],
+            right_world_coord=world_coords["right"],
+            right_eef_rot=eef_rots["right"],
         )
 
-        self.robot.single_hand_grasp(
-            follow_arm, world_coord_follow, eef_rot=cable_ori_follow, slow_mode=True
-        )
+        # self.robot.single_hand_grasp(
+        #     grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
+        # )
+
+        # self.robot.single_hand_grasp(
+        #     follow_arm, world_coord_follow, eef_rot=cable_ori_follow, slow_mode=True
+        # )
 
         self.cable_in_arm = grasp_arm
 
@@ -1019,7 +1038,8 @@ class ExperimentEnv:
 
         # Open gripper slightly -- fix!
         self.robot.close_grippers()
-        self.robot.grippers_move_to("both", distance=self.robot.gripper_opening)
+        self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening)
+        self.robot.grippers_move_to(s_arm, distance=3)
 
         # calc only w.r.t the first arm
         eef_orientations = [
@@ -1182,8 +1202,12 @@ class ExperimentEnv:
     def trace_cable(
         self, img=None, start_points=None, end_points=None, viz=False, user_pick=False
     ):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_folder = f"{self.exp_config.save_folder}/run_{timestamp}"
 
-        # TODO: clean implementation
+        if viz:
+            os.makedirs(save_folder, exist_ok=True)
+
         p1, p2 = self.board.point1, self.board.point2
 
         clips = list(self.board.get_clips().values())
@@ -1202,37 +1226,43 @@ class ExperimentEnv:
             nearest_clip = self.board.get_clips()["E"]
             nearest_clip["x"] -= p1[0]
             nearest_clip["y"] -= p1[1]
-            start_points = np.array(find_nearest_white_pixel(img, nearest_clip))
+            valid_points = find_nearest_white_pixel(img, nearest_clip)
+            # remove points near clips
+            filtered_points = [
+                p
+                for p in valid_points
+                if all(
+                    np.linalg.norm(
+                        np.array([p[0], p[1]]) - np.array([clip["x"], clip["y"]])
+                    )
+                    >= 50
+                    for clip in clips
+                )
+            ]
+            start_points = random.choice(filtered_points)
 
-            # start_points[0] -= p1[0]
-            # start_points[1] -= p1[1]
-
-        print("Start points")
-        print(start_points)
-
-        # if end_points == None:
-        # end_points = select_target_point(img, rule="end")
-
-        # TODO: fix!
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_folder = f"{self.exp_config.save_folder}/run_{timestamp}"
-        if viz:
-            os.makedirs(save_folder, exist_ok=True)
+        print("Start points", start_points)
 
         print(f"Starting trace at start point: {start_points}")
-        connection = 0
-
-        path, status = self.tracer.trace(
-            img=img.copy(),
-            start_points=start_points,
-            end_points=end_points,
-            clips=clips,
-            save_folder=save_folder,
-            idx=connection,
-            viz=viz,
-        )
+        for att in range(len(filtered_points)):
+            try:
+                path, status = self.tracer.trace(
+                    img=img.copy(),
+                    start_points=start_points,
+                    end_points=end_points,
+                    clips=clips,
+                    save_folder=save_folder,
+                    idx=0,
+                    viz=viz,
+                )
+                break
+            except:
+                start_points = random.choice(filtered_points)
+                print("Failed to trace with Analytical Tracer, trying again :(")
+                continue
 
         print("Tracing status:", status)
+        connection = 0
 
         if clips is not None:
 

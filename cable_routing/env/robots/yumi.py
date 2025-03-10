@@ -340,15 +340,8 @@ class YuMiRobotEnv:
             if slow_mode:
                 self.set_speed("slow")
 
-        # Close gripper to grasp the object
         self.close_grippers(side=arm, wait=True)
         self.set_speed("normal")
-
-        # target_pose.translation[2] += 0.05
-        # self.set_ee_pose(
-        #     left_pose=target_pose if arm == "left" else None,
-        #     right_pose=target_pose if arm == "right" else None,
-        # )
 
         print(f"{arm.capitalize()} arm grasp completed.")
 
@@ -407,59 +400,62 @@ class YuMiRobotEnv:
 
     def dual_hand_grasp(
         self,
-        world_coord: Union[np.ndarray, List[np.ndarray]],
-        spacing: float = 0.17,
-        axis: Literal["x", "y"] = "y",
-        slow_mode: bool = False,
+        left_world_coord: Optional[np.ndarray],
+        right_world_coord: Optional[np.ndarray],
+        left_eef_rot: float = np.pi,
+        right_eef_rot: float = np.pi,
+        slow_mode: bool = True,
     ) -> None:
+        """Grasp with both hands simultaneously."""
 
-        axis_index = 0 if axis == "x" else 1
+        if left_world_coord is not None:
+            self.open_grippers("left")
+        if right_world_coord is not None:
+            self.open_grippers("right")
 
-        if isinstance(world_coord, list) and len(world_coord) == 2:
-            world_coord_left, world_coord_right = world_coord
-        else:
-            world_coord_left = np.copy(world_coord)
-            world_coord_right = np.copy(world_coord)
-            world_coord_left[axis_index] += spacing / 2
-            world_coord_right[axis_index] -= spacing / 2
+        print("Moving both arms to target positions.")
 
-        if abs(world_coord_left[axis_index] - world_coord_right[axis_index]) < 0.1:
-            print("Error: Left and right arm poses would collide. Adjust positions.")
-            print("Left:", world_coord_left)
-            print("Right:", world_coord_right)
-            return
+        rot_left = RigidTransform.x_axis_rotation(
+            -np.pi
+        ) @ RigidTransform.z_axis_rotation(-left_eef_rot)
+        rot_right = RigidTransform.x_axis_rotation(
+            -np.pi
+        ) @ RigidTransform.z_axis_rotation(-right_eef_rot)
 
-        rot = (
-            RigidTransform.y_axis_rotation(np.pi)
-            if axis_index
-            else RigidTransform.y_axis_rotation(np.pi)
-            @ RigidTransform.z_axis_rotation(np.pi / 2)
+        left_target_pose = (
+            RigidTransform(rotation=rot_left, translation=left_world_coord)
+            if left_world_coord is not None
+            else None
         )
-        target_pose_left = RigidTransform(rotation=rot, translation=world_coord_left)
-        target_pose_right = RigidTransform(
-            rotation=rot,
-            translation=world_coord_right,
+        right_target_pose = (
+            RigidTransform(rotation=rot_right, translation=right_world_coord)
+            if right_world_coord is not None
+            else None
         )
 
-        target_pose_left.translation[2] += 0.1
-        target_pose_right.translation[2] += 0.1
+        if left_target_pose:
+            left_target_pose.translation[2] += 0.1
+        if right_target_pose:
+            right_target_pose.translation[2] += 0.1
 
-        self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
-
-        original_speed = self.interface._async_interface.speed
-        if slow_mode:
-            self.set_speed("slow")
+        self.set_ee_pose(left_pose=left_target_pose, right_pose=right_target_pose)
 
         for _ in range(2):
-            target_pose_left.translation[2] -= 0.05
-            target_pose_right.translation[2] -= 0.05
-            self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
+            if left_target_pose:
+                left_target_pose.translation[2] -= 0.05
+            if right_target_pose:
+                right_target_pose.translation[2] -= 0.05
 
-        self.close_grippers(side="both", wait=True)
+            self.set_ee_pose(left_pose=left_target_pose, right_pose=right_target_pose)
 
-        target_pose_left.translation[2] += 0.1
-        target_pose_right.translation[2] += 0.1
-        self.set_ee_pose(left_pose=target_pose_left, right_pose=target_pose_right)
+            if slow_mode:
+                self.set_speed("slow")
+
+        if left_world_coord is not None:
+            self.close_grippers("left", wait=False)
+        if right_world_coord is not None:
+            self.close_grippers("right", wait=False)
+
         self.set_speed("normal")
 
         print("Dual-hand grasp completed.")

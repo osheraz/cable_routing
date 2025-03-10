@@ -24,7 +24,7 @@ def mask_clip_region(image, clip, mask_size=30):
     return mask
 
 
-def center_pixels_on_cable(image, pixels, display=False):
+def center_pixels_on_cable(image, pixels, num_options=10, display=False):
     image_mask = image[:, :, 0] > 100
     kernel = np.ones((2, 2), np.uint8)
     image_mask = cv2.erode(image_mask.astype(np.uint8), kernel, iterations=1)
@@ -33,24 +33,26 @@ def center_pixels_on_cable(image, pixels, display=False):
     processed_pixels = []
     for pixel in pixels:
         distances = np.linalg.norm(white_pixels - pixel, axis=1)
-        valid_pixels = white_pixels[distances >= 100]
-        if len(valid_pixels) > 0:
-            closest_pixel = valid_pixels[np.argmin(distances[distances >= 100])]
-            processed_pixels.append([closest_pixel])
+        valid_indices = np.where(distances >= 100)[0]
+        if len(valid_indices) > 0:
+            sorted_indices = np.argsort(distances[valid_indices])
+            selected_pixels = white_pixels[valid_indices[sorted_indices[:num_options]]]
+            processed_pixels.append(selected_pixels)
 
     if display:
         pixels = np.atleast_2d(pixels)
         plt.imshow(image_mask, cmap="gray")
         for pixel in pixels:
             plt.scatter(*pixel[::-1], c="r")
-        for pixel in processed_pixels:
-            plt.scatter(*pixel[0][::-1], c="g")
+        for pixel_set in processed_pixels:
+            for p in pixel_set:
+                plt.scatter(*p[::-1], c="g")
         plt.show()
 
     return np.array(processed_pixels)
 
 
-def find_nearest_white_pixel(image, clip, display=False):
+def find_nearest_white_pixel(image, clip, num_options=10, display=False):
     if len(image.shape) == 3:
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     else:
@@ -61,22 +63,23 @@ def find_nearest_white_pixel(image, clip, display=False):
     masked_image = cv2.bitwise_and(image_gray, image_gray)
 
     centered_pixels = center_pixels_on_cable(
-        masked_image[..., None], clip_pixel, display=True
+        masked_image[..., None], clip_pixel, num_options=num_options, display=display
     )
 
-    nearest_pixel = centered_pixels[0][0]
+    nearest_pixels = centered_pixels[0]
 
     if display:
         vis = cv2.cvtColor(image_gray, cv2.COLOR_GRAY2BGR)
 
-        cv2.circle(vis, (clip["x"], clip["y"]), 10, (0, 0, 255), -1)
-        cv2.circle(vis, (nearest_pixel[1], nearest_pixel[0]), 5, (0, 255, 0), -1)
+        cv2.circle(vis, (clip["x"], clip["y"]), 5, (0, 0, 255), -1)
+        for pixel in nearest_pixels:
+            cv2.circle(vis, (pixel[1], pixel[0]), 5, (255, 255, 0), -1)
 
-        cv2.imshow("Image with Nearest Cable Pixel", vis)
+        cv2.imshow("Image with Nearest Cable Pixels", vis)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    return (nearest_pixel[1], nearest_pixel[0])
+    return [(pixel[1], pixel[0]) for pixel in nearest_pixels]
 
 
 def get_path_angle(path, N=5):

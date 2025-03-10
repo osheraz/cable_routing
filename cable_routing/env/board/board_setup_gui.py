@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import json
 import os
+from string import ascii_uppercase
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
 from cable_routing.configs.envconfig import ExperimentConfig
 
@@ -41,14 +42,22 @@ class ClipPlacementGUI:
         if event == cv2.EVENT_MOUSEMOVE:
             self.preview_position = (x, y)
         elif event == cv2.EVENT_LBUTTONDOWN:
-            self.clip_positions.append(
-                {
-                    "x": x,
-                    "y": y,
-                    "type": self.current_clip_type,
-                    "orientation": self.current_orientation,
-                }
-            )
+            letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            existing_keys = set(self.clip_positions.keys())
+
+            # Find the next available letter
+            for letter in letters:
+                if letter not in existing_keys:
+                    self.clip_positions[letter] = {
+                        "x": x,
+                        "y": y,
+                        "type": self.current_clip_type,
+                        "orientation": self.current_orientation,
+                    }
+                    print(f"Placed clip '{letter}' at ({x}, {y})")
+                    break
+            else:
+                print("Maximum clips reached, no available letters!")
 
     def draw_clips(self):
         img_display = self.image.copy()
@@ -73,9 +82,14 @@ class ClipPlacementGUI:
                 2,
             )
 
-        for clip in self.clip_positions:
+        for idx, (letter, clip) in enumerate(self.clip_positions.items()):
             self.draw_single_clip(
-                img_display, clip["x"], clip["y"], clip["type"], clip["orientation"]
+                img_display,
+                clip["x"],
+                clip["y"],
+                clip["type"],
+                clip["orientation"],
+                letter,
             )
 
         if self.preview_position:
@@ -90,7 +104,9 @@ class ClipPlacementGUI:
 
         return img_display
 
-    def draw_single_clip(self, img, x, y, clip_type, orientation, preview=False):
+    def draw_single_clip(
+        self, img, x, y, clip_type, orientation, label=None, preview=False
+    ):
         center = (x, y)
         color = (0, 255, 255) if preview else (0, 0, 255)
         cv2.circle(img, center, 10, color, -1)
@@ -115,9 +131,15 @@ class ClipPlacementGUI:
             )
 
         cv2.arrowedLine(img, arrow_start, arrow_end, (255, 0, 0), 2)
+
+        clip_label = (
+            f"{label}: {self.clip_types[clip_type]}"
+            if label
+            else self.clip_types[clip_type]
+        )
         cv2.putText(
             img,
-            self.clip_types[clip_type] + str([x, y]),
+            clip_label,
             (x + 15, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -126,13 +148,22 @@ class ClipPlacementGUI:
         )
 
     def save_board_config(self):
+        clip_dict = {}
+        letters = ascii_uppercase
+
+        for i, clip in enumerate(self.clip_positions):
+            letter = letters[i] if i < len(letters) else f"Clip_{i}"
+            clip_dict[letter] = clip
+
         with open(self.config_path, "w") as f:
-            json.dump(self.clip_positions, f, indent=4)
+            json.dump(clip_dict, f, indent=4)
         print(f"Board configuration saved to {self.config_path}")
 
         img_display = self.draw_clips()
         cv2.imwrite(self.annotated_img_path, img_display)
         print(f"Annotated image saved to {self.annotated_img_path}")
+
+        self.clip_positions = clip_dict  # Update in memory
 
     def load_board_config(self):
         try:
@@ -142,7 +173,7 @@ class ClipPlacementGUI:
                     return json.load(f)
         except:
             print("No existing board configuration found.")
-        return []
+        return {}
 
     def run(self):
         while True:
@@ -158,7 +189,6 @@ class ClipPlacementGUI:
                 self.save_board_config()
 
             elif key == ord("q"):  # Quit
-                self.save_board_config()
                 print("Final Board Configuration:", self.clip_positions)
                 break
 
