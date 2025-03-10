@@ -11,12 +11,9 @@ def main(args: ExperimentConfig):
 
     path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
 
-    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
-        path_in_pixels, cable_orientations
+    grasp_in_pixels, grasp_in_world, idx = env.release_cable_node(
+        path_in_pixels, cable_orientations, "left"
     )
-
-    # TODO modify to include orientation
-    env.goto_clip_node(env.cable_in_arm)
 
     # Safe quit.
     env.robot.go_delta(

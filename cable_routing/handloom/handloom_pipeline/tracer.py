@@ -515,7 +515,7 @@ class Tracer:
                             max_sums,
                         )
 
-            # Stoping case 5 : trace went backwards
+            # Stoping case 5 : trace ewCH clip
             # if clips is not None:
             #     for clip in clips:
             #         if (abs(global_yx[0] - clip["y"])) < self.ep_buffer and (

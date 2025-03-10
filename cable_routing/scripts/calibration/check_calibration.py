@@ -30,7 +30,7 @@ def main():
     camera_info = rospy.wait_for_message("/zedm/zed_node/rgb/camera_info", CameraInfo)
 
     T_CAM_BASE = RigidTransform.load(
-        "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
+        "/home/osheraz/cable_routing/cable_routing/configs/cameras/zed_to_world.tf"
     ).as_frames(from_frame="zed", to_frame="base_link")
 
     CAM_INTR = CameraIntrinsics(

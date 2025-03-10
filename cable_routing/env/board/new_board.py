@@ -305,7 +305,7 @@ class BoardFeature:
             return self.true_coordinate
         else:
             return (self.true_coordinate[0], self.true_coordinate[1])
-        
+    
     def get_type(self):
         return self.type
 
@@ -322,22 +322,23 @@ if __name__ == "__main__":
     board = Board(config_path=config_path, grid_size=(20,20))
     img = cv2.imread(img_path)
 
-
     goal_keypoints = [(657, 547), (825, 394), (886, 572), (1181, 240), (1309, 637)]
     cur_keypoints = [(657, 547), (827, 157), (974, 274), (1181, 240), (1313, 562)]
 
     goal_sequence = []
     num_steps = 10
     # Interpolate sequences:
-    for k in range(len(goal_keypoints)-1):
+    for k in range(len(goal_keypoints) - 1):
         goal_sequence.append(goal_keypoints[k])
+
         for l in range(1, num_steps+1):
             goal_sequence.append((goal_keypoints[k][0] + l*(goal_keypoints[k+1][0] - goal_keypoints[k][0])//num_steps, goal_keypoints[k][1] + l*(goal_keypoints[k+1][1] - goal_keypoints[k][1])//num_steps))
+
     goal_sequence.append(goal_keypoints[-1])
 
     cur_sequence = []
     # Interpolate sequences:
-    for k in range(len(cur_keypoints)-1):
+    for k in range(len(cur_keypoints) - 1):
         cur_sequence.append(cur_keypoints[k])
         for l in range(1, num_steps+1):
             cur_sequence.append((cur_keypoints[k][0] + l*(cur_keypoints[k+1][0] - cur_keypoints[k][0])//num_steps, cur_keypoints[k][1] + l*(cur_keypoints[k+1][1] - cur_keypoints[k][1])//num_steps))
@@ -368,7 +369,7 @@ if __name__ == "__main__":
     goal_config = {cur_cable.id: goal_cable}
 
     suggestion = suggest_modifications(
-        board, goal_configuration=goal_config, human_readable=True
+        board, goal_configuration=goal_config, human_readable=False
     )
     print(suggestion)
 

@@ -12,8 +12,8 @@ class BoardPlanner:
     def __init__(
         self,
         config_path=None,
-        resolution=30.0,
-        robot_radius=10.0,
+        resolution=15.0,
+        robot_radius=15.0,
         inflation_radius=40.0,
         show_animation=False,
     ):
