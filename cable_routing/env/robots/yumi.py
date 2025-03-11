@@ -23,6 +23,14 @@ class YuMiRobotEnv:
         self.move_to_home()
         self.open_grippers()
 
+        # max rotation limits wrt to the home position
+        initial_left_rot = self.robot_config.LEFT_HOME_POS[-1] * 180 / np.pi
+        initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1] * 180 / np.pi
+        self.rotation_limits = {
+            "right": (-90 + initial_right_rot, 270 + initial_right_rot),
+            "left": (-270 + initial_left_rot, 90 + initial_left_rot),
+        }
+
         # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
@@ -212,6 +220,13 @@ class YuMiRobotEnv:
         self.interface.go_delta(
             left_delta=left_delta or [0, 0, 0], right_delta=right_delta or [0, 0, 0]
         )
+
+    def get_gripper_rotation(self, arm):
+        """
+        returns the gripper rotation in degrees
+        """
+        rad_rot = self.interface.get_joint_positions(arm)[-1]
+        return rad_rot * 180 / np.pi
 
     def rotate_gripper(
         self, angle: float, arm: Literal["left", "right", "both"]

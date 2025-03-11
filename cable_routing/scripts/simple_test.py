@@ -28,9 +28,17 @@ def main(args: ExperimentConfig):
     MIN_DIST = 0.07  # minimum distance from a clip when doing the first grasp (in m)
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
+    print(env.robot.get_gripper_rotation("left"))
+    env.regrasp(arm="left", direction=-1)
+    print(env.robot.get_gripper_rotation("left"))
+    exit()
+    env.regrasp(arm="right", direction=-1)
+    env.regrasp(arm="right", direction=-1)
 
-    routing = ["F", "G", "D"][::-1]
+    print(env.robot.get_joint_values())
+    exit()
 
+    routing = ["E", "G", "I", "B"]
     print(env.route_cable(routing, display=False, dual_arm=True))
     exit()
     # clips = env.board.get_clips()
