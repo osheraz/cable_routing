@@ -333,10 +333,16 @@ class ExperimentEnv:
             next_idx = idx + jump
             move_to_pixel_follow = np.array(path[next_idx])
 
+            all_clips = np.array(
+                [[clip["x"], clip["y"]] for clip in self.board.get_clips().values()]
+            )
+
             for _ in range(5):
-                if (
-                    np.linalg.norm(move_to_pixel_follow - move_to_pixel_grasp)
-                    >= min_distance
+                if np.linalg.norm(
+                    move_to_pixel_follow - move_to_pixel_grasp
+                ) >= min_distance and all(
+                    np.linalg.norm(move_to_pixel_follow - clip) >= min_distance
+                    for clip in all_clips
                 ):
                     break
                 next_idx += jump
@@ -589,7 +595,6 @@ class ExperimentEnv:
         first need to find the cable and grasp it
         then go through each of the clips and route to that clip
         """
-        MIN_DIST = 0.7
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
 
@@ -627,7 +632,7 @@ class ExperimentEnv:
             _, _, secondary_initial_grasp_idx = self.dual_grasp_cable_node(
                 path_in_pixels, cable_orientations, grasp_arm=primary_arm, display=False
             )
-        # print(f"initial grasp index {initial_grasp_idx}")
+        print(f"initial grasp index {initial_grasp_idx}")
 
         for i in range(1, len(routing) - 1):
             print(
@@ -690,6 +695,27 @@ class ExperimentEnv:
         def normalize(vec):
             return vec / np.linalg.norm(vec)
 
+        def project(v1, v2):
+            """
+            Projects v1 onto v2
+            """
+            scalar_proj = np.dot(v1, v2) / np.linalg.norm(v2)
+            vector_proj = scalar_proj / np.linalg.norm(v2) * v2
+            return vector_proj
+
+        def angle(v1, v2):
+            """
+            finds the angle between two vectors
+            """
+            cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+            cos_theta = np.clip(
+                cos_theta, -1.0, 1.0
+            )  # ensures value is within valid range
+
+            theta_rad = np.arccos(cos_theta)
+            theta_deg = np.degrees(theta_rad)
+            return theta_deg
+
         def calculate_sequence_2():
             """
             hopefully this works better
@@ -701,6 +727,7 @@ class ExperimentEnv:
             prev2curr = normalize(np.array([curr_x - prev_x, -(curr_y - prev_y), 0]))
             curr2prev = -prev2curr
             curr2next = normalize(np.array([next_x - curr_x, -(next_y - curr_y), 0]))
+            next2curr = -curr2next
             clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
             is_clockwise = np.cross(prev2curr, curr2next)[-1] > 0
 
@@ -731,6 +758,24 @@ class ExperimentEnv:
 
             # checking if this works for c-clips
             # if curr_clip["type"] == 3:
+            #     proj1 = project(curr2next, prev2curr)
+            #     proj2 = project(clip_vec, prev2curr)
+
+            #     alt1 = curr2next - proj1
+            #     alt2 = clip_vec - proj2
+
+            #     proj3 = project(next2curr, curr2prev)
+            #     proj4 = project(clip_vec, curr2prev)
+
+            #     alt3 = next2curr - proj3
+            #     alt4 = clip_vec - proj4
+
+            #     if angle(alt1, alt2) < 90 and angle(alt3, alt4) < 90:
+            #         raise Exception(
+            #             f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
+            #         )
+
+            # if curr_clip["type"] == 3:
             #     cross1 = np.cross(prev2curr, clip_vec)[-1]
             #     cross2 = np.cross(prev2curr, curr2next)[-1]
             #     if (cross1 < 0 and cross2 > 0) or (cross1 < 0 and cross2 > 0):
@@ -742,18 +787,18 @@ class ExperimentEnv:
 
         sequence = calculate_sequence_2()
 
-        # TODO: convert to plan everything at start
-        for s in sequence:
-            self.slideto_cable_node(
-                path_in_pixels,
-                cable_orientations,
-                idx,
-                clip_id=curr_clip_id,
-                arm=arm,
-                single_hand=not dual_arm,
-                side=s,
-                display=display,
-            )
+        # # TODO: convert to plan everything at start
+        # for s in sequence:
+        #     self.slideto_cable_node(
+        #         path_in_pixels,
+        #         cable_orientations,
+        #         idx,
+        #         clip_id=curr_clip_id,
+        #         arm=arm,
+        #         single_hand=not dual_arm,
+        #         side=s,
+        #         display=display,
+        #     )
         return sequence
 
     def slideto_cable_node(
