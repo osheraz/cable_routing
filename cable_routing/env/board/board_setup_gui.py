@@ -83,6 +83,8 @@ class ClipPlacementGUI:
             )
 
         for idx, (letter, clip) in enumerate(self.clip_positions.items()):
+            # print(letter)
+            print(clip)
             self.draw_single_clip(
                 img_display,
                 clip["x"],
@@ -151,9 +153,11 @@ class ClipPlacementGUI:
         clip_dict = {}
         letters = ascii_uppercase
 
+        print(f"Clip positions {self.clip_positions}")
         for i, clip in enumerate(self.clip_positions):
             letter = letters[i] if i < len(letters) else f"Clip_{i}"
-            clip_dict[letter] = clip
+            clip_dict[letter] = self.clip_positions[clip]
+            print(f"clip_dict {clip_dict}")
 
         with open(self.config_path, "w") as f:
             json.dump(clip_dict, f, indent=4)

@@ -205,7 +205,7 @@ def get_world_coord_from_pixel_coord(
     cam_intrinsics,
     cam_extrinsics,
     image_shape=None,
-    table_depth=0.837,
+    table_depth=0.8395,
     depth_map=None,
     neighborhood_radius=10,
     display=False,

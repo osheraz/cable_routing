@@ -1,68 +1,80 @@
 {
     "A": {
-        "x": 1274,
+        "x": 1268,
         "y": 94,
         "type": 1,
         "orientation": 0
     },
     "B": {
-        "x": 703,
-        "y": 84,
+        "x": 693,
+        "y": 79,
         "type": 1,
         "orientation": 180
     },
     "C": {
-        "x": 658,
-        "y": 552,
+        "x": 652,
+        "y": 547,
         "type": 2,
         "orientation": 180
     },
     "D": {
-        "x": 656,
-        "y": 632,
+        "x": 646,
+        "y": 630,
         "type": 2,
         "orientation": 180
     },
     "E": {
-        "x": 1317,
-        "y": 563,
+        "x": 1304,
+        "y": 555,
         "type": 2,
         "orientation": 0
     },
     "F": {
-        "x": 1312,
-        "y": 636,
+        "x": 1295,
+        "y": 635,
         "type": 2,
         "orientation": 0
     },
     "G": {
-        "x": 888,
-        "y": 590,
+        "x": 1167,
+        "y": 267,
         "type": 3,
-        "orientation": 90
+        "orientation": 270
     },
     "H": {
-        "x": 1182,
-        "y": 250,
+        "x": 821,
+        "y": 179,
         "type": 3,
         "orientation": 270
     },
     "I": {
-        "x": 833,
-        "y": 167,
+        "x": 877,
+        "y": 570,
         "type": 3,
-        "orientation": 270
+        "orientation": 90
     },
     "J": {
-        "x": 976,
-        "y": 254,
+        "x": 963,
+        "y": 250,
         "type": 4,
-        "orientation": 270
+        "orientation": 90
     },
     "K": {
-        "x": 827,
-        "y": 405,
+        "x": 1157,
+        "y": 435,
         "type": 4,
-        "orientation": 270
+        "orientation": 90
+    },
+    "L": {
+        "x": 1059,
+        "y": 568,
+        "type": 4,
+        "orientation": 90
+    },
+    "M": {
+        "x": 815,
+        "y": 401,
+        "type": 4,
+        "orientation": 90
     }
 }

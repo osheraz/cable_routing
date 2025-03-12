@@ -6,14 +6,15 @@ from cable_routing.env.board.new_board import Board
 from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.algo.astar import AStarPlanner
 from cable_routing.env.ext_camera.utils.img_utils import crop_img, select_target_point
+import scipy.interpolate as si
 
 
 class BoardPlanner:
     def __init__(
         self,
         config_path=None,
-        resolution=30.0,
-        robot_radius=30.0,
+        resolution=20.0,
+        robot_radius=20.0,
         inflation_radius=30.0,
         show_animation=False,
     ):
@@ -66,10 +67,50 @@ class BoardPlanner:
 
         return ox, oy
 
-    def plan_path(self, start_pixel, goal_pixel, full_res=True):
-        """
-        Plan path directly in pixel space (cropped image coordinates).
-        """
+    def _simplify_path(
+        self,
+        path_pixels,
+        curvature_threshold=0.04,
+        distance_threshold=1.0,
+        max_step_threshold=50.0,
+    ):
+        if len(path_pixels) < 3:
+            return path_pixels
+
+        simplified_path = [path_pixels[0]]
+
+        for i in range(1, len(path_pixels) - 1):
+            prev_point = np.array(simplified_path[-1])
+            curr_point = np.array(path_pixels[i])
+            next_point = np.array(path_pixels[i + 1])
+
+            vec1 = curr_point - prev_point
+            vec2 = next_point - curr_point
+
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+
+            if norm1 < distance_threshold:
+                continue
+
+            cos_angle = np.dot(vec1, vec2) / ((norm1 + 1e-6) * (norm2 + 1e-6))
+            angle = np.arccos(np.clip(cos_angle, -1.0, 1.0))
+
+            curvature = angle / norm1
+
+            if (
+                curvature > curvature_threshold
+                or np.linalg.norm(curr_point - prev_point) > max_step_threshold
+            ):
+                simplified_path.append(path_pixels[i])
+
+        simplified_path.append(path_pixels[-1])
+
+        return np.array(simplified_path)
+
+    def plan_path(
+        self, start_pixel, goal_pixel, full_res=True, use_spline=True, simplify=True
+    ):
         if full_res:
             sx = start_pixel[0] - self.p1[0]
             sy = start_pixel[1] - self.p1[1]
@@ -79,35 +120,31 @@ class BoardPlanner:
             sx, sy = start_pixel
             gx, gy = goal_pixel
 
-        # A* directly in pixel space
-        resolution = self.resolution
-
-        a_star = AStarPlanner(self.ox, self.oy, resolution, self.robot_radius)
-
+        a_star = AStarPlanner(self.ox, self.oy, self.resolution, self.robot_radius)
         rx, ry = a_star.planning(sx, sy, gx, gy)
-        path_pixels = [(int(x), int(y)) for x, y in zip(rx, ry)]
+        path_pixels = np.array([(int(x), int(y)) for x, y in zip(rx, ry)])
 
-        if self.show_animation:
-            # === Matplotlib plot (planner view) ===
-            plt.plot(self.ox, self.oy, ".k", label="Obstacles")
-            plt.plot(sx, sy, "og", label="Start (Pixels)")
-            plt.plot(gx, gy, "xb", label="Goal (Pixels)")
-            plt.plot(rx, ry, "-r", label="Path (Pixels)")
-            plt.grid(True)
-            plt.axis("equal")
-            plt.gca().invert_yaxis()  # Because image Y=0 is top, matplotlib Y=0 is bottom
-            plt.legend()
-            plt.show()
+        if use_spline and len(path_pixels) > 3:
+            tck, _ = si.splprep([path_pixels[:, 0], path_pixels[:, 1]], s=5.0)
+            u_fine = np.linspace(0, 1, len(path_pixels) * 2)
+            x_smooth, y_smooth = si.splev(u_fine, tck)
+            path_pixels = np.array(
+                [(int(x), int(y)) for x, y in zip(x_smooth, y_smooth)]
+            )
+
+        if simplify:
+            path_pixels = self._simplify_path(path_pixels)
 
         if full_res:
             path_pixels = [[p[0] + self.p1[0], p[1] + self.p1[1]] for p in path_pixels]
+
         return np.array(path_pixels)[::-1]
 
 
 def draw_planner_overlay(
     img, planner, start_pixel, goal_pixel, path_in_pixels, resolution=20
 ):
-    print(f"Planned Path (pixel coordinates): {path_in_pixels}")
+    # print(f"Planned Path (pixel coordinates): {path_in_pixels}")
 
     overlay = img.copy()
 
@@ -150,7 +187,13 @@ def draw_planner_overlay(
     )
 
     for i in range(1, len(path_in_pixels)):
-        cv2.line(overlay, path_in_pixels[i - 1], path_in_pixels[i], (0, 255, 0), 2)
+        pt1 = tuple(map(int, path_in_pixels[i - 1]))
+        pt2 = tuple(map(int, path_in_pixels[i]))
+        cv2.line(overlay, pt1, pt2, (0, 255, 0), 2)
+
+    for point in path_in_pixels:
+        px, py = tuple(map(int, point))
+        cv2.circle(overlay, (px, py), 5, (0, 0, 255), -1)  # Mark points in red
 
     alpha = 0.3
     cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)

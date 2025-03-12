@@ -19,13 +19,15 @@ class YuMiRobotEnv:
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.gripper_opening = 4
-        self.interface.calibrate_grippers()
-        self.move_to_home()
+
         self.open_grippers()
+        self.move_to_home()
+        self.interface.calibrate_grippers()
 
         # max rotation limits wrt to the home position
         initial_left_rot = self.robot_config.LEFT_HOME_POS[-1] * 180 / np.pi
         initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1] * 180 / np.pi
+
         self.rotation_limits = {
             "right": (-90 + initial_right_rot, 270 + initial_right_rot),
             "left": (-270 + initial_left_rot, 90 + initial_left_rot),
@@ -81,7 +83,6 @@ class YuMiRobotEnv:
     def open_grippers(self, side: Literal["both", "left", "right"] = "both"):
         """Closes both grippers."""
         self.interface.open_grippers(side)
-        # self.grippers_move_to(side, distance=15)
 
     def grippers_move_to(self, hand: Literal["left", "right", "both"], distance: int):
         """
@@ -119,13 +120,13 @@ class YuMiRobotEnv:
         - Tuple[int, int]: If querying both, returns a tuple (left_gripper, right_gripper).
         """
         if hand == "left":
-            return int(self.interface.driver_left.get_gripper_pos()) * 1000
+            return int(self.interface.driver_left.get_gripper_pos() * 1000)
         elif hand == "right":
-            return int(self.interface.driver_right.get_gripper_pos()) * 1000
+            return int(self.interface.driver_right.get_gripper_pos() * 1000)
         elif hand == "both":
             return (
-                int(self.interface.driver_left.get_gripper_pos()) * 1000,
-                int(self.interface.driver_right.get_gripper_pos()) * 1000,
+                int(self.interface.driver_left.get_gripper_pos() * 1000),
+                int(self.interface.driver_right.get_gripper_pos() * 1000),
             )
         else:
             raise ValueError(
@@ -190,10 +191,14 @@ class YuMiRobotEnv:
             r_targets=r_targets,
         )
 
-        self.interface.run_trajectory(
-            l_trajectory=trajectories[0] if l_targets else None,
-            r_trajectory=trajectories[1] if r_targets else None,
-        )
+        if arms == "right" or arms == "left":
+            self.interface.run_trajectory(
+                l_trajectory=trajectories[0] if l_targets else None,
+                r_trajectory=trajectories[1] if r_targets else None,
+            )
+        else:  # "both"
+            assert print("useless")
+            self.interface.run_trajectories(trajectories)
 
     def set_joint_positions(
         self,
@@ -400,16 +405,16 @@ class YuMiRobotEnv:
             right_pose=target_pose if arm == "right" else None,
         )
 
-        # Close gripper to grasp the object
-        self.open_grippers(side=arm)
-        self.set_speed("normal")
+        # # Close gripper to grasp the object
+        # self.open_grippers(side=arm)
+        # self.set_speed("normal")
 
-        # up a
-        target_pose.translation[2] += 0.05
-        self.set_ee_pose(
-            left_pose=target_pose if arm == "left" else None,
-            right_pose=target_pose if arm == "right" else None,
-        )
+        # # up a
+        # target_pose.translation[2] += 0.05
+        # self.set_ee_pose(
+        #     left_pose=target_pose if arm == "left" else None,
+        #     right_pose=target_pose if arm == "right" else None,
+        # )
 
         print(f"{arm.capitalize()} arm move completed.")
 
@@ -419,6 +424,7 @@ class YuMiRobotEnv:
         right_world_coord: Optional[np.ndarray],
         left_eef_rot: float = np.pi,
         right_eef_rot: float = np.pi,
+        grasp_arm="right",
         slow_mode: bool = True,
     ) -> None:
         """Grasp with both hands simultaneously."""
@@ -427,6 +433,8 @@ class YuMiRobotEnv:
             self.open_grippers("left")
         if right_world_coord is not None:
             self.open_grippers("right")
+
+        self.grippers_move_to(grasp_arm, distance=10)
 
         print("Moving both arms to target positions.")
 

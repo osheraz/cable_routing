@@ -25,21 +25,25 @@ def main(args: ExperimentConfig):
 
         Execute this motion with a single arm (no dual arm needed for the task)
     """
+    import numpy as np
+
     MIN_DIST = 0.07  # minimum distance from a clip when doing the first grasp (in m)
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
-    print(env.robot.get_gripper_rotation("left"))
-    env.regrasp(arm="left", direction=-1)
-    print(env.robot.get_gripper_rotation("left"))
-    exit()
-    env.regrasp(arm="right", direction=-1)
-    env.regrasp(arm="right", direction=-1)
+    # exit()
+    # print(env.robot.get_gripper_rotation("left"))
+    # env.regrasp(arm="left", direction=-1)
+    # print(env.robot.get_gripper_rotation("left"))
+    # exit()
+    # env.regrasp(arm="right", direction=-1)
+    # env.regrasp(arm="right", direction=-1)
 
-    print(env.robot.get_joint_values())
-    exit()
+    # print(env.robot.get_joint_values())
+    # exit()
 
-    routing = ["E", "G", "I", "B"]
-    print(env.route_cable(routing, display=False, dual_arm=True))
+    routing = ["E", "M", "C"]
+
+    print(env.route_cable(routing, display=False, dual_arm=True, primary_arm="right"))
     exit()
     # clips = env.board.get_clips()
     # print(env.board.get_clips())
