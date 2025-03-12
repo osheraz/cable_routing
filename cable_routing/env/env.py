@@ -798,7 +798,7 @@ class ExperimentEnv:
             )
 
             expected_rotation = (
-                self.robot.get_gripper_rotation(arm) + 180 * rotation_dir
+                self.robot.get_gripper_rotation(arm) + np.pi * rotation_dir
             )
             if expected_rotation < self.robot.rotation_limits[arm][0]:
                 print("REGRASPING")
@@ -1129,7 +1129,8 @@ class ExperimentEnv:
         has_regrasped=0,
         display=False,
     ):
-
+        print("WAYPOINTS")
+        print(waypoints)
         s_arm = "right" if arm == "left" else "left"
         eefs_pose = self.robot.get_ee_pose()
         current_pose = eefs_pose[0 if arm == "left" else 1]
@@ -1140,12 +1141,21 @@ class ExperimentEnv:
         z_min, z_max = 0.0, 0.3
 
         offset_vector = np.array([0.1, 0.1, 0.1])
+        offset_vector_x = np.array([0.1, 0, 0.1])
+        offset_vector_y = np.array([0, 0.1, 0.1])
+
         waypoints_secondary = []
 
         for i in range(len(waypoints) - 1):
             motion_direction = waypoints[i + 1] - waypoints[i]
             motion_direction /= np.linalg.norm(motion_direction)
 
+            secondary_wp_x = waypoints[i] + motion_direction * np.linalg.norm(
+                offset_vector_x
+            )
+            secondary_wp_y = waypoints[i] + motion_direction * np.linalg.norm(
+                offset_vector_y
+            )
             secondary_wp = waypoints[i] + motion_direction * np.linalg.norm(
                 offset_vector
             )
@@ -1155,30 +1165,64 @@ class ExperimentEnv:
             else:
                 last_valid_wp = waypoints[i]
 
-            secondary_wp[0] = (
-                np.clip(secondary_wp[0], x_min, x_max)
-                if x_min <= secondary_wp[0] <= x_max
-                else last_valid_wp[0]
-            )
-            secondary_wp[1] = (
-                np.clip(secondary_wp[1], y_min, y_max)
-                if y_min <= secondary_wp[1] <= y_max
-                else last_valid_wp[1]
-            )
-            secondary_wp[2] = 0.1
+            if s_arm == "left":
+                secondary_wp[0] = (
+                    np.clip(secondary_wp[0], x_min, x_max)
+                    if x_min <= secondary_wp[0] <= x_max
+                    else last_valid_wp[0]
+                )
+                secondary_wp[1] = (
+                    np.clip(secondary_wp[1], y_min, y_max)
+                    if y_min <= secondary_wp[1] <= y_max
+                    else last_valid_wp[1]
+                )
+                secondary_wp[2] = 0.1
 
-            if len(waypoints_secondary) < 1:
-                last_second_waypoint = secondary_wp
+                secondary_wp_x[0] = (
+                    np.clip(secondary_wp_x[0], x_min, x_max)
+                    if x_min <= secondary_wp_x[0] <= x_max
+                    else last_valid_wp[0]
+                )
+                secondary_wp_x[1] = (
+                    np.clip(secondary_wp_x[1], y_min, y_max)
+                    if y_min <= secondary_wp_x[1] <= y_max
+                    else last_valid_wp[1]
+                )
+                secondary_wp_x[2] = 0.1
+
+                secondary_wp_y[0] = (
+                    np.clip(secondary_wp_y[0], x_min, x_max)
+                    if x_min <= secondary_wp_y[0] <= x_max
+                    else last_valid_wp[0]
+                )
+                secondary_wp_y[1] = (
+                    np.clip(secondary_wp_y[1], y_min, y_max)
+                    if y_min <= secondary_wp_y[1] <= y_max
+                    else last_valid_wp[1]
+                )
+                secondary_wp_y[2] = 0.1
+
+            # if len(waypoints_secondary) < 1:
+            #     last_second_waypoint = secondary_wp
+            # else:
+            #     last_second_waypoint = waypoints_secondary[-1]
+
+            # motion_second = last_second_waypoint - waypoints_secondary[-1]
+            # waypoints_secondary.append(secondary_wp)
+
+            if abs(waypoints[i][0] - secondary_wp[0]) < abs(
+                waypoints[i][1] - secondary_wp[1]
+            ):
+                waypoints_secondary.append(secondary_wp_x)
             else:
-                last_second_waypoint = waypoints_secondary[-1]
-
-            motion_second = waypoints_secondary
+                waypoints_secondary.append(secondary_wp_y)
             waypoints_secondary.append(secondary_wp)
 
         waypoints_secondary.append(waypoints_secondary[-1])
 
         # Open gripper slightly -- fix!
         # self.robot.close_grippers()
+        # opens the grippers, DOES NOT ACTUALLY MOVE THE ROBOT
         self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening)
         self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening)
 
@@ -1267,7 +1311,10 @@ class ExperimentEnv:
         ]
         # move secondary arm before moving primary arm to reduce the likelihood of cable tangling
         self.robot.plan_and_execute_linear_waypoints(
-            s_arm, waypoints=poses_secondary[0:3]
+            s_arm, waypoints=poses_secondary[0:2]
+        )
+        self.robot.plan_and_execute_linear_waypoints(
+            s_arm, waypoints=poses_secondary[1:3]
         )
 
         self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
@@ -1326,12 +1373,15 @@ class ExperimentEnv:
             #     )
 
             self.robot.plan_and_execute_linear_waypoints(
-                arm, waypoints=poses[i : i + 3]
+                arm, waypoints=poses[i : i + 2]
             )
 
-            if not i + 6 > len(poses_secondary):
+            if not 2 * i + 5 > len(poses_secondary):
                 self.robot.plan_and_execute_linear_waypoints(
-                    s_arm, waypoints=poses_secondary[i + 3 : i + 6]
+                    s_arm, waypoints=poses_secondary[2 * i + 2 : 2 * i + 4]
+                )
+                self.robot.plan_and_execute_linear_waypoints(
+                    s_arm, waypoints=poses_secondary[2 * i + 3 : 2 * i + 5]
                 )
 
             # actual_pose_primary = self.robot.get_ee_pose()[0 if arm == "left" else 1]

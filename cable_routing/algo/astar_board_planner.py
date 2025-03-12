@@ -14,7 +14,7 @@ class BoardPlanner:
         self,
         config_path=None,
         resolution=20.0,
-        robot_radius=20.0,
+        robot_radius=25.0,
         inflation_radius=30.0,
         show_animation=False,
     ):
@@ -109,7 +109,7 @@ class BoardPlanner:
         return np.array(simplified_path)
 
     def plan_path(
-        self, start_pixel, goal_pixel, full_res=True, use_spline=True, simplify=True
+        self, start_pixel, goal_pixel, full_res=True, use_spline=False, simplify=True
     ):
         if full_res:
             sx = start_pixel[0] - self.p1[0]

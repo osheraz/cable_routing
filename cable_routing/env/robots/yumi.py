@@ -25,12 +25,15 @@ class YuMiRobotEnv:
         self.interface.calibrate_grippers()
 
         # max rotation limits wrt to the home position
-        initial_left_rot = self.robot_config.LEFT_HOME_POS[-1] * 180 / np.pi
-        initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1] * 180 / np.pi
+        initial_left_rot = self.robot_config.LEFT_HOME_POS[-1]
+        initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1]
 
         self.rotation_limits = {
-            "right": (-90 + initial_right_rot, 270 + initial_right_rot),
-            "left": (-270 + initial_left_rot, 90 + initial_left_rot),
+            "right": (
+                -np.pi / 2 + initial_right_rot,
+                3 * np.pi / 2 + initial_right_rot,
+            ),
+            "left": (-3 * np.pi / 2 + initial_left_rot, np.pi / 2 + initial_left_rot),
         }
 
         # self.close_grippers()
@@ -231,7 +234,7 @@ class YuMiRobotEnv:
         returns the gripper rotation in degrees
         """
         rad_rot = self.interface.get_joint_positions(arm)[-1]
-        return rad_rot * 180 / np.pi
+        return rad_rot
 
     def rotate_gripper(
         self, angle: float, arm: Literal["left", "right", "both"]
