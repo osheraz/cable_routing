@@ -1135,7 +1135,7 @@ class ExperimentEnv:
         current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
 
-        x_min, x_max = 0.0, 0.6
+        x_min, x_max = 0.0, 0.65
         y_min, y_max = -0.4, 0.4
         z_min, z_max = 0.0, 0.3
 
@@ -1167,6 +1167,12 @@ class ExperimentEnv:
             )
             secondary_wp[2] = 0.1
 
+            if len(waypoints_secondary) < 1:
+                last_second_waypoint = secondary_wp
+            else:
+                last_second_waypoint = waypoints_secondary[-1]
+
+            motion_second = waypoints_secondary
             waypoints_secondary.append(secondary_wp)
 
         waypoints_secondary.append(waypoints_secondary[-1])
@@ -1241,7 +1247,8 @@ class ExperimentEnv:
             plt.show()
 
         # Move to the first waypoint at the correct height
-        self.robot.set_speed("slow")
+        # self.robot.set_speed("slow")
+
         poses = [
             RigidTransform(translation=waypoint, rotation=current_pose.rotation)
             for waypoint in [current_pose.translation, waypoints[0]]
@@ -1253,6 +1260,15 @@ class ExperimentEnv:
         # ]
 
         # self.robot.plan_and_execute_linear_waypoints(s_arm, waypoints=poses_secondary)
+
+        poses_secondary = [
+            RigidTransform(translation=wp, rotation=second_pose.rotation)
+            for wp in waypoints_secondary
+        ]
+        # move secondary arm before moving primary arm to reduce the likelihood of cable tangling
+        self.robot.plan_and_execute_linear_waypoints(
+            s_arm, waypoints=poses_secondary[0:3]
+        )
 
         self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
 
@@ -1280,11 +1296,6 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-ori),
             )
             for wp, ori in zip(waypoints, eef_orientations)
-        ]
-
-        poses_secondary = [
-            RigidTransform(translation=wp, rotation=second_pose.rotation)
-            for wp in waypoints_secondary
         ]
 
         # poses_secondary = [
@@ -1315,12 +1326,13 @@ class ExperimentEnv:
             #     )
 
             self.robot.plan_and_execute_linear_waypoints(
-                s_arm, waypoints=poses_secondary[i : i + 3]
-            )
-
-            self.robot.plan_and_execute_linear_waypoints(
                 arm, waypoints=poses[i : i + 3]
             )
+
+            if not i + 6 > len(poses_secondary):
+                self.robot.plan_and_execute_linear_waypoints(
+                    s_arm, waypoints=poses_secondary[i + 3 : i + 6]
+                )
 
             # actual_pose_primary = self.robot.get_ee_pose()[0 if arm == "left" else 1]
             # actual_pose_secondary = self.robot.get_ee_pose()[

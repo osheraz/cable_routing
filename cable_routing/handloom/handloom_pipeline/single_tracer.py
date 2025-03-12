@@ -30,6 +30,7 @@ class CableTracer:
         viz=False,
     ):
 
+        raw_img = img.copy()
         img = self.convert_to_handloom_input(img, invert=False)
 
         start_pixels = np.array(start_points)[::-1]  # TODO: To y-x
@@ -59,6 +60,7 @@ class CableTracer:
             viz=viz,
             idx=idx,
             save_folder=save_folder,
+            raw_img=raw_img,
         )
 
         path = np.flip(path, axis=1)

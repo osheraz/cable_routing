@@ -5,53 +5,58 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo
 import threading
 
+
 class CameraPublisher:
     def __init__(
-        self, 
-        device_id: int=0,
-        name: str='camera_0',
-        image_height: int=480,
-        image_width: int=848,
-        fps: int=10,
-        init_node: bool=False
-        ):
-        
+        self,
+        device_id: int = 0,
+        name: str = "camera_0",
+        image_height: int = 640,
+        image_width: int = 480,
+        fps: int = 10,
+        init_node: bool = False,
+    ):
+
         if init_node:
-            rospy.init_node('camera_publisher', anonymous=True)
-        
+            rospy.init_node("camera_publisher", anonymous=True)
+
         self.name = name
         self.running = False
         self.thread = None
-        
+
         self.bridge = CvBridge()
-        
+
         self.cap = cv2.VideoCapture(device_id)
         if not self.cap.isOpened():
             rospy.logerr("Failed to open camera!")
             return
-        
-        self.height = image_height 
-        self.width = image_width 
+
+        self.height = image_height
+        self.width = image_width
         self.fps = fps
 
-        self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
-        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        # self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+        # self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self.cap.set(cv2.CAP_PROP_FPS, self.fps)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
         # Create publishers
-        self.image_pub = rospy.Publisher(f'/camera/{self.name}/image_raw', Image, queue_size=10)
-        
+        self.image_pub = rospy.Publisher(
+            f"/camera/{self.name}/image_raw", Image, queue_size=10
+        )
+
         self.rate = rospy.Rate(self.fps)
-        
-        rospy.loginfo(f"Started camera publisher {self.name} - Resolution: {self.width}x{self.height}, FPS: {self.fps}")
+
+        rospy.loginfo(
+            f"Started camera publisher {self.name} - Resolution: {self.width}x{self.height}, FPS: {self.fps}"
+        )
 
     def _run(self):
         """Internal run method that runs in the thread"""
         while not rospy.is_shutdown() and self.running:
             ret, frame = self.cap.read()
-            
+
             if ret:
                 try:
                     ros_image = self.bridge.cv2_to_imgmsg(frame, "bgr8")
@@ -60,7 +65,7 @@ class CameraPublisher:
                     self.image_pub.publish(ros_image)
                 except Exception as e:
                     rospy.logerr(f"Failed to publish image from {self.name}: {str(e)}")
-            
+
             self.rate.sleep()
 
     def start(self):
@@ -82,22 +87,23 @@ class CameraPublisher:
     def __del__(self):
         """Cleanup camera resources"""
         self.stop()
-        if hasattr(self, 'cap'):
+        if hasattr(self, "cap"):
             self.cap.release()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     try:
-        rospy.init_node('multi_camera_publisher')
-        
+        rospy.init_node("camera_publisher")
+
         # Creates two camera publishers
-        camera0 = CameraPublisher(device_id=0, name='camera_0')
-        
+        camera0 = CameraPublisher(device_id=2, name="camera_0")
+
         camera0.start()
-        
+
         rospy.spin()
-        
+
     except rospy.ROSInterruptException:
         pass
     finally:
-        if 'camera0' in locals():
+        if "camera0" in locals():
             camera0.stop()
