@@ -294,7 +294,7 @@ class ExperimentEnv:
         cable_orientations,  # ori will slightly be off
         grasp_arm="right",
         follow_arm="left",
-        start_clip_id="E",
+        start_clip_id="A",
         idx=None,
         user_pick=False,
         display=False,
@@ -797,33 +797,33 @@ class ExperimentEnv:
                 has_regrasped=has_regrasped,
             )
 
-            expected_rotation = (
-                self.robot.get_gripper_rotation(arm) + 180 * rotation_dir
-            )
-            if expected_rotation < self.robot.rotation_limits[arm][0]:
-                print("REGRASPING")
-                print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
-                print(f"{expected_rotation=}")
-                print("Rotating with direction = 1 (positive rotation)")
-                self.regrasp(arm, direction=1)
-                has_regrasped = 1
-                print(f"{has_regrasped=}")
-                print("New eef rotation", self.robot.get_gripper_rotation(arm))
+            # expected_rotation = (
+            #     self.robot.get_gripper_rotation(arm) + 180 * rotation_dir
+            # )
+            # if expected_rotation < self.robot.rotation_limits[arm][0]:
+            #     print("REGRASPING")
+            #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
+            #     print(f"{expected_rotation=}")
+            #     print("Rotating with direction = 1 (positive rotation)")
+            #     self.regrasp(arm, direction=1)
+            #     has_regrasped = 1
+            #     print(f"{has_regrasped=}")
+            #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
 
-                print()
-            elif expected_rotation > self.robot.rotation_limits[arm][1]:
-                print("REGRASPING")
-                print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
-                print(f"{expected_rotation=}")
-                print("Rotating with direction = -1 (positive rotation)")
-                self.regrasp(arm, direction=-1)
-                has_regrasped = -1
-                print(f"{has_regrasped=}")
-                print("New eef rotation", self.robot.get_gripper_rotation(arm))
-            else:
-                print("NOT REGRASPING")
-                print("Current eef rotation", self.robot.get_gripper_rotation(arm))
-                print(f"{expected_rotation=}")
+            #     print()
+            # elif expected_rotation > self.robot.rotation_limits[arm][1]:
+            #     print("REGRASPING")
+            #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
+            #     print(f"{expected_rotation=}")
+            #     print("Rotating with direction = -1 (positive rotation)")
+            #     self.regrasp(arm, direction=-1)
+            #     has_regrasped = -1
+            #     print(f"{has_regrasped=}")
+            #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
+            # else:
+            #     print("NOT REGRASPING")
+            #     print("Current eef rotation", self.robot.get_gripper_rotation(arm))
+            #     print(f"{expected_rotation=}")
 
         return sequence
 
@@ -1135,12 +1135,14 @@ class ExperimentEnv:
         current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
 
-        x_min, x_max = 0.0, 0.65
+        x_min, x_max = 0.0, 0.55
         y_min, y_max = -0.4, 0.4
         z_min, z_max = 0.0, 0.3
 
         offset_vector = np.array([0.1, 0.1, 0.1])
         waypoints_secondary = []
+
+        y_threshold = 0.1  # Adjust this value to control minimum distance between arms
 
         for i in range(len(waypoints) - 1):
             motion_direction = waypoints[i + 1] - waypoints[i]
@@ -1155,6 +1157,7 @@ class ExperimentEnv:
             else:
                 last_valid_wp = waypoints[i]
 
+            # Clip X and Y coordinates to stay within the defined bounds
             secondary_wp[0] = (
                 np.clip(secondary_wp[0], x_min, x_max)
                 if x_min <= secondary_wp[0] <= x_max
@@ -1165,21 +1168,34 @@ class ExperimentEnv:
                 if y_min <= secondary_wp[1] <= y_max
                 else last_valid_wp[1]
             )
-            secondary_wp[2] = 0.1
+            secondary_wp[2] = 0.1  # Keep Z constant
 
-            if len(waypoints_secondary) < 1:
-                last_second_waypoint = secondary_wp
-            else:
-                last_second_waypoint = waypoints_secondary[-1]
+            # *** Ensure no crossing occurs while maintaining a threshold ***
+            if arm == "right":
+                # Secondary arm must always have y >= primary arm + threshold
+                if secondary_wp[1] < waypoints[i][1] + y_threshold:
+                    secondary_wp[1] = waypoints[i][1] + y_threshold
+            elif arm == "left":
+                # Secondary arm must always have y <= primary arm - threshold
+                if secondary_wp[1] > waypoints[i][1] - y_threshold:
+                    secondary_wp[1] = waypoints[i][1] - y_threshold
 
-            motion_second = waypoints_secondary
+            # Check for crossing between successive waypoints
+            if i > 0:
+                prev_diff = waypoints_secondary[i - 1][1] - waypoints[i - 1][1]
+                curr_diff = secondary_wp[1] - waypoints[i][1]
+
+                # If sign changes, a crossing has occurred. Correct the position with threshold.
+                if prev_diff * curr_diff < 0:
+                    if arm == "right":
+                        secondary_wp[1] = waypoints[i][1] + y_threshold
+                    elif arm == "left":
+                        secondary_wp[1] = waypoints[i][1] - y_threshold
+
             waypoints_secondary.append(secondary_wp)
-
-        waypoints_secondary.append(waypoints_secondary[-1])
-
         # Open gripper slightly -- fix!
         # self.robot.close_grippers()
-        self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening)
+        self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening - 2)
         self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening)
 
         # calc only w.r.t the first arm
@@ -1203,25 +1219,45 @@ class ExperimentEnv:
         eef_orientations = np.unwrap(eef_orientations)
         eef_orientations = np.mod(eef_orientations, 2 * np.pi).tolist()
 
-        eef_second_orientations = [
-            get_perpendicular_orientation(
-                waypoints_secondary[i - 1], waypoints_secondary[i]
-            )
-            for i in range(1, len(waypoints_secondary))
-        ]
-        eef_second_orientations.append(eef_second_orientations[-1])
+        # eef_second_orientations = [
+        #     get_perpendicular_orientation(
+        #         waypoints_secondary[i - 1], waypoints_secondary[i]
+        #     )
+        #     for i in range(1, len(waypoints_secondary))
+        # ]
+        # eef_second_orientations.append(eef_second_orientations[-1])
 
-        eef_second_orientations = np.unwrap(eef_second_orientations)
-        eef_second_orientations = np.mod(eef_second_orientations, 2 * np.pi).tolist()
+        # eef_second_orientations = np.unwrap(eef_second_orientations)
+        # eef_second_orientations = np.mod(eef_second_orientations, 2 * np.pi).tolist()
 
         if display:
             path_arr = np.array(waypoints)
+            path_arr2 = np.array(waypoints_secondary)
 
             plt.figure(figsize=(10, 8))
             plt.plot(path_arr[:, 0], path_arr[:, 1], "b-", label="Cable Path")
+            plt.plot(path_arr2[:, 0], path_arr2[:, 1], "r-", label="Cable Path2")
 
             for idx, (point, orientation) in enumerate(
                 zip(waypoints, eef_orientations)
+            ):
+                dx = 0.02 * np.cos(orientation)
+                dy = 0.02 * np.sin(orientation)
+
+                plt.arrow(
+                    point[0],
+                    point[1],
+                    dx,
+                    dy,
+                    head_width=0.005,
+                    head_length=0.01,
+                    fc="red",
+                    ec="red",
+                )
+                plt.text(point[0], point[1], f"{idx}", fontsize=12, color="darkgreen")
+
+            for idx, (point, orientation) in enumerate(
+                zip(waypoints_secondary, eef_orientations)
             ):
                 dx = 0.02 * np.cos(orientation)
                 dy = 0.02 * np.sin(orientation)
@@ -1298,6 +1334,11 @@ class ExperimentEnv:
             for wp, ori in zip(waypoints, eef_orientations)
         ]
 
+        poses_secondary = [
+            RigidTransform(translation=wp, rotation=second_pose.rotation)
+            for wp in waypoints_secondary
+        ]
+
         # poses_secondary = [
         #     RigidTransform(
         #         translation=wp,
@@ -1329,9 +1370,9 @@ class ExperimentEnv:
                 arm, waypoints=poses[i : i + 3]
             )
 
-            if not i + 6 > len(poses_secondary):
+            if not i + 4 > len(poses_secondary):
                 self.robot.plan_and_execute_linear_waypoints(
-                    s_arm, waypoints=poses_secondary[i + 3 : i + 6]
+                    s_arm, waypoints=poses_secondary[i + 1 : i + 4]
                 )
 
             # actual_pose_primary = self.robot.get_ee_pose()[0 if arm == "left" else 1]
@@ -1391,7 +1432,7 @@ class ExperimentEnv:
         if start_points == None and user_pick:
             start_points = select_target_point(img, rule="start")
         else:
-            nearest_clip = self.board.get_clips()["E"]
+            nearest_clip = self.board.get_clips()["A"]
             nearest_clip["x"] -= p1[0]
             nearest_clip["y"] -= p1[1]
             valid_points = find_nearest_white_pixel(img, nearest_clip)
@@ -1403,7 +1444,7 @@ class ExperimentEnv:
                     np.linalg.norm(
                         np.array([p[0], p[1]]) - np.array([clip["x"], clip["y"]])
                     )
-                    >= 50
+                    >= 20
                     for clip in clips
                 )
             ]

@@ -8,10 +8,12 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 class SensorIOException(Exception):
     pass
 
-class BRIOSensor():
+
+class BRIOSensor:
     """A driver for BRIO.
 
     Parameters
@@ -31,29 +33,38 @@ class BRIOSensor():
         self.brio_config = BrioConfig()
         self.width = self.brio_config.width
         self.height = self.brio_config.height
-        self.width_ = self.brio_config.width_
-        self.height_ = self.brio_config.height_
-        self.BRIO_DIST = np.asarray(self.brio_config.BRIO_DIST)
+        # self.width_ = self.brio_config.width_
+        # self.height_ = self.brio_config.height_
+        # self.BRIO_DIST = np.asarray(self.brio_config.BRIO_DIST)
 
         # Camera Intrinsics
-        self._camera_intr = self.create_intr(
-            self.width,
-            self.height,
-            self.brio_config.fx,
-            self.brio_config.fy,
-            self.brio_config.cx,
-            self.brio_config.cy
-        )
+        # self._camera_intr = self.create_intr(
+        #     self.width,
+        #     self.height,
+        #     self.brio_config.fx,
+        #     self.brio_config.fy,
+        #     self.brio_config.cx,
+        #     self.brio_config.cy,
+        # )
 
         # Optimal new camera matrix
-        self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(
-            self._camera_intr.K, self.BRIO_DIST, (self.width, self.height), 1, (self.width, self.height)
-        )
+        # self.newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(
+        #     self._camera_intr.K,
+        #     self.BRIO_DIST,
+        #     (self.width, self.height),
+        #     1,
+        #     (self.width, self.height),
+        # )
 
         # Undistortion mapping
-        self.mapx, self.mapy = cv2.initUndistortRectifyMap(
-            self._camera_intr.K, self.BRIO_DIST, None, self.newcameramtx, (self.width, self.height), 5
-        )
+        # self.mapx, self.mapy = cv2.initUndistortRectifyMap(
+        #     self._camera_intr.K,
+        #     self.BRIO_DIST,
+        #     None,
+        #     self.newcameramtx,
+        #     (self.width, self.height),
+        #     5,
+        # )
 
         # Initialize camera
         self.initialize()
@@ -61,13 +72,17 @@ class BRIOSensor():
     def initialize(self):
         """Initialize the BRIO camera."""
         # Check if device exists
-        if not any(f.startswith(f"video{self._device}") for f in os.listdir('/dev')):
-            raise SensorIOException(f"Device {self._device} not found; check `ls /dev/video*`")
+        if not any(f.startswith(f"video{self._device}") for f in os.listdir("/dev")):
+            raise SensorIOException(
+                f"Device {self._device} not found; check `ls /dev/video*`"
+            )
 
         # Open camera
         self.cap = cv2.VideoCapture(self._device)
         if not self.cap.isOpened():
-            raise SensorIOException(f"Failed to open BRIO camera on /dev/video{self._device}")
+            raise SensorIOException(
+                f"Failed to open BRIO camera on /dev/video{self._device}"
+            )
 
         self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)  # Turn autofocus off
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
@@ -93,7 +108,7 @@ class BRIOSensor():
     def create_intr(width, height, fx, fy, cx, cy):
         """Create camera intrinsics."""
         return CameraIntrinsics(
-            fx=fx, fy=fy, cx=cx, cy=cy, width=width, height=height, frame='brio'
+            fx=fx, fy=fy, cx=cx, cy=cy, width=width, height=height, frame="brio"
         )
 
     @property
@@ -126,7 +141,7 @@ class BRIOSensor():
         """Get infrared frame."""
         return self.intrinsics.frame
 
-    @property 
+    @property
     def frame(self):
         """Get current frame."""
         return self.intrinsics.frame
@@ -153,10 +168,10 @@ class BRIOSensor():
                 return None
 
         # Undistort and crop
-        dst = cv2.remap(frame, self.mapx, self.mapy, cv2.INTER_LINEAR)
-        x, y, w, h = self.roi
-        color = dst[y:y+h, x:x+w]  # Crop ROI
-        return cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
+        # dst = cv2.remap(frame, self.mapx, self.mapy, cv2.INTER_LINEAR)
+        # x, y, w, h = self.roi
+        # color = dst[y : y + h, x : x + w]  # Crop ROI
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     def start(self):
         """Start the sensor driver."""
@@ -180,7 +195,7 @@ class BRIOSensor():
 
 def main():
     """Main function to run the BRIO sensor."""
-    brio_camera = BRIOSensor(device=0)
+    brio_camera = BRIOSensor(device=2)
 
     if not brio_camera.is_running:
         print("Failed to start BRIO Sensor.")
@@ -193,10 +208,10 @@ def main():
         if frame is None:
             continue
 
-        frame = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
-        cv2.imshow("BRIO Camera Stream", frame)
+        # frame = cv2.resize(frame, (800, 600), interpolation=cv2.INTER_AREA)
+        cv2.imshow("BRIO Camera Stream", cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
     brio_camera.stop()
