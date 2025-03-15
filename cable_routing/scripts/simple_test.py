@@ -18,22 +18,21 @@ def main(args: ExperimentConfig):
             Trace using handloom a little bit down the cable and grasp (so you don't grasp right next to the clip)
                 Grasp with enough closure to grab the cable but not enough to hold it in place (allow the cable to slip in the gripper)
 
-        Next:
+        Next:4
             Plan out the desired motion path through all the clips
                 We know clip orientations so need to plan out how to route around each clip in the correct way
                 Can add in the bungee style clips and have the gripper go through them
 
         Execute this motion with a single arm (no dual arm needed for the task)
     """
-    import numpy as np
 
-    MIN_DIST = 0.07  # minimum distance from a clip when doing the first grasp (in m)
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
+    env.robot.open_grippers()
     # exit()0
     # print(env.robot.get_gripper_rotation("left"))
     # env.regrasp(arm="left", direction=-1)
-    # print(env.robot.get_gripper_rotation("left"))
+    # print(env.robot.get_gripper_rotation("left   "))
     # exit()
     # env.regrasp(arm="right", direction=-1)
     # env.regrasp(arm="right", direction=-1)
@@ -41,9 +40,12 @@ def main(args: ExperimentConfig):
     # print(env.robot.get_joint_values())
     # exit()
 
-    routing = ["A", "B", "C", "H"]
-
-    print(env.route_cable(routing, display=False, dual_arm=True, primary_arm="right"))
+    routing = ["A", "B", "C", "E", "F", "I"]
+    print(
+        env.route_cable(
+            routing, display=False, dual_arm=False, primary_arm="right", save_viz=False
+        )
+    )
     exit()
     # clips = env.board.get_clips()
     # print(env.board.get_clips())
@@ -62,6 +64,7 @@ def main(args: ExperimentConfig):
     # while curr_dist < MIN_DIST:
     #     initial_grasp_idx += 1
     #     curr_dist = distance(
+
     #         path_in_world[initial_grasp_idx], [start_clip["x"], start_clip["y"]]
     #     )
 

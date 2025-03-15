@@ -15,7 +15,7 @@ class BoardPlanner:
         config_path=None,
         resolution=20.0,
         robot_radius=20.0,
-        inflation_radius=30.0,
+        inflation_radius=40.0,
         show_animation=False,
     ):
         self.show_animation = show_animation

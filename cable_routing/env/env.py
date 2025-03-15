@@ -170,7 +170,7 @@ class ExperimentEnv:
         cable_orientations = np.unwrap(cable_orientations)
         cable_orientations = np.mod(cable_orientations, 2 * np.pi).tolist()
 
-        if display:
+        if display and False:
             path_arr = np.array(path_in_world)
 
             plt.figure(figsize=(10, 8))
@@ -221,15 +221,31 @@ class ExperimentEnv:
         cable_orientations,
         arm,
         idx=None,
+        start_clip_id="A",
         display=False,
+        user_pick=False,
     ):
+        offset_distance = 100
 
-        if idx is None:
+        if idx is None and user_pick:
             frame = self.zed_cam.get_rgb()
             move_to_pixel = pick_target_on_path(frame, path)
             move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
         else:
-            move_to_pixel = path[idx]
+            # move_to_pixel = path[idx]
+            clip_positions = [
+                np.array([clip["x"], clip["y"]])
+                for clip in self.board.get_clips().values()
+            ]
+            nearest_clip = self.board.get_clips()[start_clip_id]
+            nearest_clip = np.array([nearest_clip["x"], nearest_clip["y"]])
+            start_trace = np.array(path[0])
+            direction = (start_trace - nearest_clip) / np.linalg.norm(
+                start_trace - nearest_clip
+            )
+            move_to_pixel, idx = find_nearest_point(
+                path, nearest_clip + direction * offset_distance
+            )
 
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel,
@@ -317,9 +333,9 @@ class ExperimentEnv:
             # find the nearest clip to trace
 
             offset_distance = 100
-            min_distance = 200
+            min_distance = 300  # 150
             jump = 20
-            exclusion_radius = 10
+            exclusion_radius = 50
 
             clip_positions = [
                 np.array([clip["x"], clip["y"]])
@@ -603,7 +619,12 @@ class ExperimentEnv:
         """
 
     def route_cable(
-        self, routing: list, primary_arm="right", display=False, dual_arm=True
+        self,
+        routing: list,
+        primary_arm="right",
+        display=False,
+        dual_arm=True,
+        save_viz=False,
     ):
         """
         routing is a list of the clips in order
@@ -616,7 +637,7 @@ class ExperimentEnv:
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
 
         path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
-            display=False,
+            display=save_viz,
             arm=primary_arm,
             # start_points=[start_clip["x"], start_clip["y"]],
         )
@@ -641,7 +662,6 @@ class ExperimentEnv:
                     cable_orientations,
                     arm=primary_arm,  # idx=initial_grasp_idx
                     display=display,
-                    start_clip=routing[0],
                 )
             )
 
@@ -857,7 +877,6 @@ class ExperimentEnv:
                 plan["target_coord"],
                 cable_orientations,
                 arm=arm,
-                has_regrasped=has_regrasped,
             )
         else:
             # add Literal - both.
@@ -889,6 +908,8 @@ class ExperimentEnv:
         delta = {arm: [0, 0, 0.095], secondary_arm: [0, 0, 0]}
         self.robot.go_delta(left_delta=delta["left"], right_delta=delta["right"])
 
+        # self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening)
+
         self.robot.set_speed("normal")
         self.robot.rotate_gripper(np.pi * direction, arm=arm)
         # self.robot.grippers_move_to(hand=arm, distance=10)
@@ -896,6 +917,7 @@ class ExperimentEnv:
         self.robot.set_speed("slow")
         self.robot.go_delta(left_delta=delta["left"], right_delta=delta["right"])
         self.robot.close_grippers(side=arm)
+        self.robot.set_speed("normal")
 
     def plan_slide_to_cable_node(
         self, path_in_pixel, idx, clip_id=None, arm=None, side="up", display=False
@@ -1135,7 +1157,7 @@ class ExperimentEnv:
         current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
 
-        x_min, x_max = 0.0, 0.55
+        x_min, x_max = 0.0, 0.6
         y_min, y_max = -0.4, 0.4
         z_min, z_max = 0.0, 0.3
 
@@ -1196,7 +1218,7 @@ class ExperimentEnv:
         # Open gripper slightly -- fix!
         # self.robot.close_grippers()
         self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening - 2)
-        self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening)
+        self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening - 2)
 
         # calc only w.r.t the first arm
         # cur_rot = np.deg2rad(self.robot.get_gripper_rotation(arm))
@@ -1285,10 +1307,10 @@ class ExperimentEnv:
         # Move to the first waypoint at the correct height
         # self.robot.set_speed("slow")
 
-        poses = [
-            RigidTransform(translation=waypoint, rotation=current_pose.rotation)
-            for waypoint in [current_pose.translation, waypoints[0]]
-        ]
+        # poses = [
+        #     RigidTransform(translation=waypoint, rotation=current_pose.rotation)
+        #     for waypoint in [current_pose.translation, waypoints[0]]
+        # ]
 
         # poses_secondary = [
         #     RigidTransform(translation=waypoint, rotation=second_pose.rotation)
@@ -1302,12 +1324,17 @@ class ExperimentEnv:
             for wp in waypoints_secondary
         ]
         # move secondary arm before moving primary arm to reduce the likelihood of cable tangling
-        self.robot.plan_and_execute_linear_waypoints(
-            s_arm, waypoints=poses_secondary[0:3]
-        )
+        try:
+            self.robot.plan_and_execute_linear_waypoints(
+                s_arm, waypoints=poses_secondary[0:3]
+            )
+        except:
+            print("failed second arm motion")
 
-        self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
-
+        try:
+            self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
+        except:
+            print("failed primary arm motion")
         self.robot.set_speed("normal")
 
         # Align orientation to the first waypoint
@@ -1322,8 +1349,11 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
-        self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
 
+        try:
+            self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
+        except:
+            print("failed primary arm motion")
         # Follow the full path
         poses = [
             RigidTransform(
@@ -1366,15 +1396,21 @@ class ExperimentEnv:
             #         waypoints=(poses[i : i + 3], poses_secondary[i : i + 3]),
             #     )
 
-            self.robot.plan_and_execute_linear_waypoints(
-                arm, waypoints=poses[i : i + 3]
-            )
+            try:
+
+                self.robot.plan_and_execute_linear_waypoints(
+                    arm, waypoints=poses[i : i + 3]
+                )
+            except:
+                print("failed primary arm motion")
 
             if not i + 4 > len(poses_secondary):
-                self.robot.plan_and_execute_linear_waypoints(
-                    s_arm, waypoints=poses_secondary[i + 1 : i + 4]
-                )
-
+                try:
+                    self.robot.plan_and_execute_linear_waypoints(
+                        s_arm, waypoints=poses_secondary[i + 1 : i + 4]
+                    )
+                except:
+                    print("failed secondary arm motion")
             # actual_pose_primary = self.robot.get_ee_pose()[0 if arm == "left" else 1]
             # actual_pose_secondary = self.robot.get_ee_pose()[
             #     1 if s_arm == "left" else 0
@@ -1391,10 +1427,13 @@ class ExperimentEnv:
             # print(f"  Primary Pose deviation = {error_primary:.4f} meters")
             # print(f"  Secondary Pose deviation = {error_secondary:.4f} meters")
 
-        self.robot.set_ee_pose(
-            left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
-            right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
-        )
+        try:
+            self.robot.set_ee_pose(
+                left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
+                right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+            )
+        except:
+            print("failed final motion")
         # for start_pose, end_pose in zip(poses, poses[1:]):
         #     self.robot.plan_and_execute_linear_waypoints(
         #         arm, waypoints=[start_pose, end_pose]

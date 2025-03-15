@@ -10,7 +10,7 @@ import time
 
 
 class YuMiRobotEnv:
-    def __init__(self, robot_config, speed=0.2):
+    def __init__(self, robot_config, speed=0.15):
         print("[YUMI_JACOBI] Initializing YuMi...")
 
         self.robot_config = robot_config
@@ -334,7 +334,8 @@ class YuMiRobotEnv:
     ) -> None:
         """ """
 
-        self.open_grippers(arm)
+        self.grippers_move_to(arm, distance=10)
+
         print(f"Moving {arm} arm to the target position.")
         # Move above the target
         rot = RigidTransform.x_axis_rotation(-np.pi) @ RigidTransform.z_axis_rotation(

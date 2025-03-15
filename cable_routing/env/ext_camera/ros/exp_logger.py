@@ -7,6 +7,8 @@ from std_msgs.msg import String
 from datetime import datetime
 from cable_routing.env.ext_camera.ros.brio_subscriber import BRIOSubscriber
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
+from cable_routing.env.board.new_board import Board
+from cable_routing.configs.envconfig import ExperimentConfig
 
 
 class CameraDataCollector:
@@ -137,14 +139,12 @@ class CameraDataCollector:
 
 
 if __name__ == "__main__":
+
     save_dir = "/home/osheraz/cable_routing/records"
+    exp_config = ExperimentConfig
 
-    class DummyBoard:
-        def get_clips(self):
-            return {"clip_1": [1, 2, 3], "clip_2": [4, 5, 6]}
-
-    board = DummyBoard()
-    plan = ["Step 1", "Step 2", "Step 3"]
+    board = Board(config_path=exp_config.board_cfg_path)
+    plan = ["A", "B", "C", "H"]
 
     collector = CameraDataCollector(
         save_directory=save_dir,
