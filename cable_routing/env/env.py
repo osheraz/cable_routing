@@ -455,17 +455,17 @@ class ExperimentEnv:
         }
 
         # Call the function dynamically
-        self.robot.dual_hand_grasp(
-            left_world_coord=world_coords["left"],
-            left_eef_rot=eef_rots["left"],
-            right_world_coord=world_coords["right"],
-            right_eef_rot=eef_rots["right"],
-            grasp_arm=grasp_arm,
-        )
-
-        # self.robot.single_hand_grasp(
-        #     grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
+        # self.robot.dual_hand_grasp(
+        #     left_world_coord=world_coords["left"],
+        #     left_eef_rot=eef_rots["left"],
+        #     right_world_coord=world_coords["right"],
+        #     right_eef_rot=eef_rots["right"],
+        #     grasp_arm=grasp_arm,
         # )
+
+        self.robot.single_hand_grasp(
+            grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
+        )
 
         # self.robot.single_hand_grasp(
         #     follow_arm, world_coord_follow, eef_rot=cable_ori_follow, slow_mode=True
