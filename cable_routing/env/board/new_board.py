@@ -3,6 +3,7 @@ import numpy as np
 import json
 import os
 import random
+from copy import deepcopy
 
 from cable_routing.env.board.cable import Cable
 from cable_routing.algo.levenshtein import suggest_modifications
@@ -58,9 +59,10 @@ class Board:
 
         clip_types = {1: "6Pin", 2: "2Pin", 3: "Clip", 4: "Retainer"}
 
-        for clip in self.load_board_config():
+        for id, clip in self.load_board_config().items():
             self.add_keypoint(
                 BoardFeature(
+                    id,
                     clip["x"],
                     clip["y"],
                     clip_types[clip["type"]],
@@ -81,7 +83,7 @@ class Board:
     def find_nearest_clip(self, path):
 
         # TODO: SOMETHING IS MODIFYING GET CLIPS
-        clips = self.load_board_config()  # self.get_clips()
+        clips = self.get_clips()  # self.get_clips()
 
         # for clip in clips:
         #     clip["x"] -= self.point1[0]
@@ -92,7 +94,7 @@ class Board:
         nearest_clip = min(
             clips,
             key=lambda clip: np.linalg.norm(
-                np.array([clip["x"], clip["y"]]) - last_point
+                np.array([clips[clip]["x"], clips[clip]["y"]]) - last_point
             ),
         )
 
@@ -153,16 +155,15 @@ class Board:
 
         img_display = img.copy()
 
-        for key_location in self.key_locations:
-
-            clip = self.key_features[key_location]
-
+        for id, clip in self.get_clips().items():
+            # print(clip)
             self.draw_clip(
                 img_display,
-                clip.get_true_coordinate()[0],
-                clip.get_true_coordinate()[1],
-                clip.get_type(),
-                clip.get_orientation(),
+                id,
+                clip["x"],
+                clip["y"],
+                clip["type"],
+                clip["orientation"],
             )
 
         # for clip in self.clip_positions:
@@ -207,7 +208,7 @@ class Board:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    def draw_clip(self, img, x, y, clip_type, orientation):
+    def draw_clip(self, img, id, x, y, clip_type, orientation):
 
         center = (x, y)
         cv2.circle(img, center, 10, (0, 0, 255), -1)
@@ -233,7 +234,7 @@ class Board:
         cv2.arrowedLine(img, arrow_start, arrow_end, (255, 0, 0), 2)
         cv2.putText(
             img,
-            clip_type,
+            f"ID: {id}, TYPE: {clip_type}",
             (x + 15, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -242,7 +243,7 @@ class Board:
         )
 
     def get_clips(self):
-        return self.clip_positions.copy()
+        return deepcopy(self.clip_positions)
 
     def get_cables(self):
         return self.cables.copy()
@@ -269,7 +270,7 @@ class BoardFeature:
     Can be subclassed to define more specific features with particular behavior.
     """
 
-    def __init__(self, x, y, type="N/A", orientation=0, grid_size=None):
+    def __init__(self, id, x, y, type="N/A", orientation=0, grid_size=None):
         """
         Instantiate an instance of our feature object.
 
@@ -284,6 +285,7 @@ class BoardFeature:
         Returns:
                 None
         """
+        self.id = id
         self.true_coordinate = (x, y, orientation)
         self.type = type
 
@@ -305,7 +307,7 @@ class BoardFeature:
             return self.true_coordinate
         else:
             return (self.true_coordinate[0], self.true_coordinate[1])
-    
+
     def get_type(self):
         return self.type
 
@@ -319,7 +321,7 @@ if __name__ == "__main__":
     config_path = cfg.board_cfg_path
     img_path = cfg.bg_img_path
 
-    board = Board(config_path=config_path, grid_size=(20,20))
+    board = Board(config_path=config_path, grid_size=(20, 20))
     img = cv2.imread(img_path)
 
     goal_keypoints = [(657, 547), (825, 394), (886, 572), (1181, 240), (1309, 637)]
@@ -331,8 +333,19 @@ if __name__ == "__main__":
     for k in range(len(goal_keypoints) - 1):
         goal_sequence.append(goal_keypoints[k])
 
-        for l in range(1, num_steps+1):
-            goal_sequence.append((goal_keypoints[k][0] + l*(goal_keypoints[k+1][0] - goal_keypoints[k][0])//num_steps, goal_keypoints[k][1] + l*(goal_keypoints[k+1][1] - goal_keypoints[k][1])//num_steps))
+        for l in range(1, num_steps + 1):
+            goal_sequence.append(
+                (
+                    goal_keypoints[k][0]
+                    + l
+                    * (goal_keypoints[k + 1][0] - goal_keypoints[k][0])
+                    // num_steps,
+                    goal_keypoints[k][1]
+                    + l
+                    * (goal_keypoints[k + 1][1] - goal_keypoints[k][1])
+                    // num_steps,
+                )
+            )
 
     goal_sequence.append(goal_keypoints[-1])
 
@@ -340,8 +353,15 @@ if __name__ == "__main__":
     # Interpolate sequences:
     for k in range(len(cur_keypoints) - 1):
         cur_sequence.append(cur_keypoints[k])
-        for l in range(1, num_steps+1):
-            cur_sequence.append((cur_keypoints[k][0] + l*(cur_keypoints[k+1][0] - cur_keypoints[k][0])//num_steps, cur_keypoints[k][1] + l*(cur_keypoints[k+1][1] - cur_keypoints[k][1])//num_steps))
+        for l in range(1, num_steps + 1):
+            cur_sequence.append(
+                (
+                    cur_keypoints[k][0]
+                    + l * (cur_keypoints[k + 1][0] - cur_keypoints[k][0]) // num_steps,
+                    cur_keypoints[k][1]
+                    + l * (cur_keypoints[k + 1][1] - cur_keypoints[k][1]) // num_steps,
+                )
+            )
 
     cur_sequence.append(cur_keypoints[-1])
 
@@ -364,7 +384,11 @@ if __name__ == "__main__":
     board.add_cable(cur_cable)
 
     # cur_cable.get_keypoints()[0]
-    print(cur_cable.intermediate_points(cur_cable.get_keypoints()[0], cur_cable.get_keypoints()[1], num_points=2))
+    print(
+        cur_cable.intermediate_points(
+            cur_cable.get_keypoints()[0], cur_cable.get_keypoints()[1], num_points=2
+        )
+    )
 
     goal_config = {cur_cable.id: goal_cable}
 
@@ -374,4 +398,4 @@ if __name__ == "__main__":
     print(suggestion)
 
     annotated_img = board.visualize_board(img, quantized=False)
-    #annotated_img = board.visualize_board(img, quantized=True)
+    # annotated_img = board.visualize_board(img, quantized=True)

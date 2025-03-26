@@ -76,7 +76,7 @@ class CameraPublisher:
 if __name__ == "__main__":
     try:
         rospy.init_node("multi_camera_publisher")
-        camera0 = CameraPublisher(device_id=0, name="camera_0")
+        camera0 = CameraPublisher(device_id=2, name="camera_0")
         camera0.start()
         rospy.spin()
     except rospy.ROSInterruptException:

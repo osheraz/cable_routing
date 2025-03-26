@@ -30,11 +30,13 @@ class CableTracer:
         viz=False,
     ):
 
+        raw_img = img.copy()
         img = self.convert_to_handloom_input(img, invert=False)
 
         start_pixels = np.array(start_points)[::-1]  # TODO: To y-x
 
-        end_points = [np.array(end_points)[::-1]]
+        if end_points is not None:
+            end_points = [np.array(end_points)[::-1]]
 
         img_cp = img.copy()
 
@@ -45,7 +47,7 @@ class CableTracer:
         else:
             start_pixels = np.flip(last_path[-4:], axis=1)
 
-        if len(start_pixels) < 3:
+        if len(start_pixels) < 2:
             print("Failed analytical trace")
             return None
 
@@ -58,6 +60,7 @@ class CableTracer:
             viz=viz,
             idx=idx,
             save_folder=save_folder,
+            raw_img=raw_img,
         )
 
         path = np.flip(path, axis=1)

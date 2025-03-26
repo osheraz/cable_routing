@@ -372,6 +372,7 @@ class Tracer:
         model=None,
         sample=False,
         idx=1,
+        raw_img=None,
         save_folder="./trace_test",
     ):
 
@@ -383,7 +384,10 @@ class Tracer:
             raise ValueError(f"Need at least {num_condition_points} start points")
 
         path = [start_point for start_point in start_points]
-        disp_img = (image.copy() * 255.0).astype(np.uint8)
+        if raw_img is None:
+            disp_img = (image.copy() * 255.0).astype(np.uint8)
+        else:
+            disp_img = raw_img
 
         heatmaps, crops, covariances = [], [], []
 
@@ -572,22 +576,26 @@ class Tracer:
                         (0, 0, 255),
                         2,
                     )
-                    cv2.circle(
-                        disp_img, tuple(endpoints[0][::-1]), 10, (0, 255, 255), -1
-                    )
-                    cv2.circle(
-                        disp_img, tuple(start_points[0][::-1]), 10, (255, 0, 255), -1
-                    )
-
-                if clips is not None:
-                    for clip in clips:
+                    if endpoints is not None:
                         cv2.circle(
-                            disp_img, (clip["x"], clip["y"]), 10, (255, 255, 255), -1
+                            disp_img, tuple(endpoints[0][::-1]), 10, (0, 255, 255), -1
                         )
+                    # cv2.circle(
+                    #     disp_img, tuple(start_points[0][::-1]), 10, (255, 0, 255), -1
+                    # )
+
+                # if clips is not None:
+                #     for clip in clips:
+                #         cv2.circle(
+                #             disp_img, (clip["x"], clip["y"]), 10, (255, 255, 255), -1
+                #         )
 
                 cv2.imshow("disp_img", disp_img)
                 cv2.waitKey(1)
-                plt.imsave(f"{save_folder}/{idx}_disp_img_{iter}.png", disp_img)
+                plt.imsave(
+                    f"{save_folder}/{idx}_disp_img_{iter}.png",
+                    cv2.cvtColor(disp_img, cv2.COLOR_BGR2RGB),
+                )
 
                 scaling_factor = 5
                 new_shape = tuple(np.array(model_np.shape[:2]) * scaling_factor)
@@ -643,6 +651,7 @@ class Tracer:
         clips=None,
         viz=False,
         idx=0,
+        raw_img=None,
         save_folder="./trace_test",
     ):
 
@@ -696,11 +705,15 @@ class Tracer:
             viz=viz,
             idx=idx,
             save_folder=save_folder,
+            raw_img=raw_img,
         )
         if viz:
             img_cp = (img.copy() * 255.0).astype(np.uint8)
-            trace_viz = self.visualize_path(img_cp, spline.copy())
-            plt.imsave(f"{save_folder}/trace_{idx}.png", trace_viz)
+            trace_viz = self.visualize_path(raw_img, spline.copy())
+            plt.imsave(
+                f"{save_folder}/trace_{idx}.png",
+                cv2.cvtColor(trace_viz, cv2.COLOR_BGR2RGB),
+            )
 
         spline = np.array(spline)
         # spline = np.concatenate((starting_points, spline), axis=0)
@@ -732,7 +745,7 @@ class Tracer:
                 pt1[::-1],
                 pt2[::-1],
                 color_for_pct(i / len(path)),
-                2 if not black else 5,
+                7,  # ,2 if not black else 5,
             )
         return img
 

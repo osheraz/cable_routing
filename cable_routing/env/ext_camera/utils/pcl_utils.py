@@ -4,6 +4,32 @@ import cv2
 from autolab_core import RigidTransform
 
 
+def get_rotation_matrix(roll, pitch, yaw):
+
+    roll, pitch, yaw = np.radians([roll, pitch, yaw])
+
+    R_x = np.array(
+        [[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]],
+        dtype=np.float32,
+    )
+
+    R_y = np.array(
+        [
+            [np.cos(pitch), 0, np.sin(pitch)],
+            [0, 1, 0],
+            [-np.sin(pitch), 0, np.cos(pitch)],
+        ],
+        dtype=np.float32,
+    )
+
+    R_z = np.array(
+        [[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]],
+        dtype=np.float32,
+    )
+
+    return R_z @ R_y @ R_x
+
+
 def generate_color_gradient(num_points):
     colors = np.zeros((num_points, 3))
     for i in range(num_points):

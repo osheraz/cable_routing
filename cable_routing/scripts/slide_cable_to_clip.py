@@ -9,24 +9,31 @@ def main(args: ExperimentConfig):
     rospy.init_node("pick_nic")
     env = ExperimentEnv(args)
 
+    arm = "right"
+
     path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
-        display=False
+        arm=arm, display=False
     )
 
-    grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
-        path_in_pixels, cable_orientations, display=True
+    grasp_in_pixels, grasp_in_world, idx = env.dual_grasp_cable_node(
+        path_in_pixels, cable_orientations, grasp_arm=arm, display=False
     )
+
+    # grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
+    #     path_in_pixels, cable_orientations, arm=arm, display=False
+    # )
 
     env.slideto_cable_node(
-        path_in_pixels,
-        path_in_world,
-        cable_orientations,
-        idx,
+        cable_path_in_pixel=path_in_pixels,
+        # path_in_world,
+        cable_orientations=cable_orientations,
+        idx=idx,
+        arm=arm,
+        single_hand=False,
         side="left",
-        display=True,
+        display=False,
     )
 
-    # Safe quit.
     env.robot.go_delta(
         left_delta=[0, 0, 0.05] if env.cable_in_arm == "left" else None,
         right_delta=[0, 0, 0.05] if env.cable_in_arm == "right" else None,

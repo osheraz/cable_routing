@@ -25,23 +25,23 @@ class EnvConfig:
 class YuMiConfig:
     YUMI_MIN_POS: Tuple[float, ...] = (-2.94, -2.00, -2.94, -2.16, -5.06, -1.54, -4.00)
     LEFT_HOME_POS: Tuple[float, ...] = (
-        -0.9512928592851002,
-        -0.826257179789771,
-        1.1051303596535273,
-        0.3525379799595703,
-        1.1488412220991615,
-        0.7785103632911491,
-        0.9975875206203292,
+        -0.9172001362743418,
+        -1.0366493693300391,
+        1.5004868766459873,
+        -0.25395203410733785,
+        1.3189672814847857,
+        0.7292753723753909,
+        1.9140088154338772,
     )
 
     RIGHT_HOME_POS: Tuple[float, ...] = (
-        0.814048250667439,
-        -0.9499458324057382,
-        -1.162067545336931,
-        0.3735491891168322,
-        -1.3118667613864166,
-        0.7759426099471219,
-        -1.5252212515862071,
+        0.9691538151889074,
+        -1.2582136528012442,
+        -1.037448916868308,
+        0.27029505476882715,
+        -1.5464260059756905,
+        0.9777185412546022,
+        -1.5255711909534435,
     )
 
 
@@ -101,8 +101,11 @@ class ExperimentConfig:
     robot_cfg: YuMiConfig
     board_cfg: EnvConfig
 
-    cam_to_robot_trans_path: str = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world.tf"
+    cam_to_robot_right_trans_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world_right.tf"
+    )
+    cam_to_robot_left_trans_path: str = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world_left.tf"
     )
     board_cfg_path: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "board/board_config.json"

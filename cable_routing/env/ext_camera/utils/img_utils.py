@@ -11,6 +11,77 @@ SCALE_FACTOR = 1.0
 SAFE_HEIGHT = 0.002
 
 
+def mask_clip_region(image, clip, mask_size=30):
+    mask = np.ones(image.shape[:2], dtype=np.uint8) * 255
+    x, y = clip["x"], clip["y"]
+
+    for i in range(-mask_size, mask_size):
+        for j in range(-mask_size, mask_size):
+            px, py = x + i, y + j
+            if 0 <= px < image.shape[1] and 0 <= py < image.shape[0]:
+                mask[py, px] = 0
+
+    return mask
+
+
+def center_pixels_on_cable(image, pixels, num_options=10, display=False):
+    image_mask = image[:, :, 0] > 100
+    kernel = np.ones((2, 2), np.uint8)
+    image_mask = cv2.erode(image_mask.astype(np.uint8), kernel, iterations=1)
+    white_pixels = np.argwhere(image_mask)
+
+    processed_pixels = []
+    for pixel in pixels:
+        distances = np.linalg.norm(white_pixels - pixel, axis=1)
+        valid_indices = np.where(distances >= 100)[0]
+        if len(valid_indices) > 0:
+            sorted_indices = np.argsort(distances[valid_indices])
+            selected_pixels = white_pixels[valid_indices[sorted_indices[:num_options]]]
+            processed_pixels.append(selected_pixels)
+
+    if display:
+        pixels = np.atleast_2d(pixels)
+        plt.imshow(image_mask, cmap="gray")
+        for pixel in pixels:
+            plt.scatter(*pixel[::-1], c="r")
+        for pixel_set in processed_pixels:
+            for p in pixel_set:
+                plt.scatter(*p[::-1], c="g")
+        plt.show()
+
+    return np.array(processed_pixels)
+
+
+def find_nearest_white_pixel(image, clip, num_options=10, display=False):
+    if len(image.shape) == 3:
+        image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    else:
+        image_gray = image
+
+    clip_pixel = np.array([[clip["y"], clip["x"]]])
+
+    masked_image = cv2.bitwise_and(image_gray, image_gray)
+
+    centered_pixels = center_pixels_on_cable(
+        masked_image[..., None], clip_pixel, num_options=num_options, display=display
+    )
+
+    nearest_pixels = centered_pixels[0]
+
+    if display:
+        vis = cv2.cvtColor(image_gray, cv2.COLOR_GRAY2BGR)
+
+        cv2.circle(vis, (clip["x"], clip["y"]), 5, (0, 0, 255), -1)
+        for pixel in nearest_pixels:
+            cv2.circle(vis, (pixel[1], pixel[0]), 5, (255, 255, 0), -1)
+
+        cv2.imshow("Image with Nearest Cable Pixels", vis)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return [(pixel[1], pixel[0]) for pixel in nearest_pixels]
+
+
 def get_path_angle(path, N=5):
     """Estimate the cable's direction from the last N points."""
     if len(path) < N + 1:
@@ -134,10 +205,10 @@ def get_world_coord_from_pixel_coord(
     cam_intrinsics,
     cam_extrinsics,
     image_shape=None,
-    table_depth=0.835,
+    table_depth=0.83815,  # 9
     depth_map=None,
     neighborhood_radius=10,
-    display=True,
+    display=False,
     is_clip=False,
 ):
     pixel_coord = np.array(pixel_coord, dtype=np.float32)
@@ -345,3 +416,7 @@ def select_target_point(image, rule="start"):
 
     cv2.destroyAllWindows()
     return [params["u"], params["v"]]
+
+
+def distance(p1: list, p2: list):
+    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
