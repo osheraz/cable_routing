@@ -40,7 +40,7 @@ def main(args: ExperimentConfig):
     # print(env.robot.get_joint_values())
     # exit()
 
-    routing = ["A", "B", "C", "E", "G", "I"]
+    routing = ["A", "C", "G"]
     print(
         env.route_cable(
             routing, display=False, dual_arm=True, primary_arm="right", save_viz=False

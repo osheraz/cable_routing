@@ -109,7 +109,7 @@ class Tracer:
             pretrained=self.trace_config.pretrained,
         ).cuda()
         self.trace_model.load_state_dict(
-            torch.load("/home/osheraz/handloom/models/tracer/tracer_model.pth")
+            torch.load("/home/osherexp/cable_routing/cable_routing/handloom/models/tracer/tracer_model.pth")
         )  # Uncomment for bajcsy
         augs = []
         augs.append(
@@ -822,7 +822,7 @@ if __name__ == "__main__":
 
     tracer = Tracer()
     analytic_tracer = AnalyticTracer()
-    eval_folder = "/home/osheraz/handloom/data/real_data/real_data_for_tracer/test"
+    eval_folder = "/home/osherexp/handloom/data/real_data/real_data_for_tracer/test"
     for i, data in enumerate(np.sort(os.listdir(eval_folder))):
         if i == 0:
             continue

@@ -1,7 +1,5 @@
-from ast import Assert
 from math import e
 from re import S
-from huggingface_hub import whoami
 import rospy
 import numpy as np
 import cv2
@@ -14,7 +12,6 @@ import numpy as np
 import datetime
 import os
 import random
-from scipy.spatial import KDTree
 from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
 from cable_routing.env.ext_camera.ros.zed_camera import ZedCameraSubscriber
@@ -333,7 +330,7 @@ class ExperimentEnv:
             # find the nearest clip to trace
 
             offset_distance = 100
-            min_distance = 300  # 150
+            min_distance = 150  # 150
             jump = 20
             exclusion_radius = 50
 
@@ -455,17 +452,17 @@ class ExperimentEnv:
         }
 
         # Call the function dynamically
-        # self.robot.dual_hand_grasp(
-        #     left_world_coord=world_coords["left"],
-        #     left_eef_rot=eef_rots["left"],
-        #     right_world_coord=world_coords["right"],
-        #     right_eef_rot=eef_rots["right"],
-        #     grasp_arm=grasp_arm,
-        # )
-
-        self.robot.single_hand_grasp(
-            grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
+        self.robot.dual_hand_grasp(
+            left_world_coord=world_coords["left"],
+            left_eef_rot=eef_rots["left"],
+            right_world_coord=world_coords["right"],
+            right_eef_rot=eef_rots["right"],
+            grasp_arm=grasp_arm,
         )
+
+        # self.robot.single_hand_grasp(
+        #     grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
+        # )
 
         # self.robot.single_hand_grasp(
         #     follow_arm, world_coord_follow, eef_rot=cable_ori_follow, slow_mode=True
@@ -666,7 +663,7 @@ class ExperimentEnv:
             )
 
         else:
-
+            
             _, _, secondary_initial_grasp_idx = self.dual_grasp_cable_node(
                 path_in_pixels,
                 cable_orientations,
