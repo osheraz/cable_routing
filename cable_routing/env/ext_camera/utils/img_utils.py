@@ -1,4 +1,3 @@
-import re
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,6 +9,8 @@ from mpl_toolkits.mplot3d import Axes3D
 SCALE_FACTOR = 1.0
 SAFE_HEIGHT = 0.002
 
+def normalize(vec):
+    return vec / np.linalg.norm(vec)
 
 def mask_clip_region(image, clip, mask_size=30):
     mask = np.ones(image.shape[:2], dtype=np.uint8) * 255

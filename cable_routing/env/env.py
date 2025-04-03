@@ -27,9 +27,9 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     find_nearest_point,
     get_perpendicular_orientation,
     get_path_angle,
-    distance,
     find_nearest_white_pixel,
-)  # TODO: Split to env_utils, img_utils etc..
+    normalize
+)  
 from cable_routing.env.ext_camera.utils.pcl_utils import (
     project_points_to_image,
     get_rotation_matrix,
@@ -40,7 +40,6 @@ from cable_routing.handloom.handloom_pipeline.tracer import (
 
 
 class ExperimentEnv:
-    """Superclass for all Robots environments."""
 
     def __init__(
         self,
@@ -79,13 +78,6 @@ class ExperimentEnv:
 
         self.workspace_img = self.zed_cam.get_rgb().copy()
 
-        ######################################################
-        # self.set_board_region()
-        # TODO: find a better way..
-        # TODO: add support for this in cfg
-        # TODO: modify to Jaimyn code
-        # TODO: move all plots to vis_utils
-        ######################################################
 
     def adjust_extrinsic(self, arm="right", roll=0.0, pitch=0.0, yaw=0.0):
 
@@ -103,12 +95,9 @@ class ExperimentEnv:
 
         _, self.point1, self.point2 = crop_board(img)
 
-        # print(self.point1, self.point2)
-
     def check_calibration(self, arm="right"):
         """we are going to poke all the clips/plugs etc"""
 
-        # TODO - above board
         self.robot.move_to_home()
 
         self.board.visualize_board(self.zed_cam.rgb_image)
@@ -146,7 +135,8 @@ class ExperimentEnv:
         self, arm="right", start_points=None, end_points=None, display=False
     ):
 
-        # TODO convert_path_to_world_coord is w.r.t the right arm!!! fix
+        # TODO convert_path_to_world_coord is w.r.t the right arm.
+        
         path_in_pixels, _ = self.trace_cable(
             start_points=start_points, end_points=end_points, viz=display
         )
@@ -167,7 +157,7 @@ class ExperimentEnv:
         cable_orientations = np.unwrap(cable_orientations)
         cable_orientations = np.mod(cable_orientations, 2 * np.pi).tolist()
 
-        if display and False:
+        if display:
             path_arr = np.array(path_in_world)
 
             plt.figure(figsize=(10, 8))
@@ -222,7 +212,7 @@ class ExperimentEnv:
         display=False,
         user_pick=False,
     ):
-        offset_distance = 100
+        offset_distance = self.exp_config.grasp_cfg.offset_distance
 
         if idx is None and user_pick:
             frame = self.zed_cam.get_rgb()
@@ -329,10 +319,10 @@ class ExperimentEnv:
         else:
             # find the nearest clip to trace
 
-            offset_distance = 100
-            min_distance = 150  # 150
-            jump = 20
-            exclusion_radius = 50
+            offset_distance = self.exp_config.grasp_cfg.offset_distance
+            min_distance = self.exp_config.grasp_cfg.min_distance  
+            jump = self.exp_config.grasp_cfg.jump  
+            exclusion_radius = self.exp_config.grasp_cfg.exclusion_radius  
 
             clip_positions = [
                 np.array([clip["x"], clip["y"]])
@@ -361,10 +351,10 @@ class ExperimentEnv:
                     np.linalg.norm(move_to_pixel_follow - clip) >= exclusion_radius
                     for clip in clip_positions
                 ):
-                    break  # Valid position found
+                    break 
                 next_idx += jump
 
-                if next_idx >= len(path):  # Ensure index stays within bounds
+                if next_idx >= len(path): 
                     break
 
                 move_to_pixel_follow = np.array(path[next_idx])
@@ -374,7 +364,6 @@ class ExperimentEnv:
                     path, pick_target_on_path(frame, path)
                 )
 
-            # move_to_pixel_grasp = path[idx]
 
         world_coord_grasp = get_world_coord_from_pixel_coord(
             move_to_pixel_grasp,
@@ -451,7 +440,6 @@ class ExperimentEnv:
             "right": cable_ori_follow if follow_arm == "right" else cable_ori_grasp,
         }
 
-        # Call the function dynamically
         self.robot.dual_hand_grasp(
             left_world_coord=world_coords["left"],
             left_eef_rot=eef_rots["left"],
@@ -459,14 +447,6 @@ class ExperimentEnv:
             right_eef_rot=eef_rots["right"],
             grasp_arm=grasp_arm,
         )
-
-        # self.robot.single_hand_grasp(
-        #     grasp_arm, world_coord_grasp, eef_rot=cable_ori_grasp, slow_mode=True
-        # )
-
-        # self.robot.single_hand_grasp(
-        #     follow_arm, world_coord_follow, eef_rot=cable_ori_follow, slow_mode=True
-        # )
 
         self.cable_in_arm = grasp_arm
 
@@ -482,7 +462,6 @@ class ExperimentEnv:
         clip = self.board.find_nearest_clip([move_to_pixel])
         move_to_pixel = [clip["x"], clip["y"]]
 
-        # TODO - should pick a safe grasp point automatically.
         move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
 
         world_coord = get_world_coord_from_pixel_coord(
@@ -568,12 +547,11 @@ class ExperimentEnv:
             # is_clip=True,
         )
 
-        distance = 0.02
         offset = {
-            "left": [0, distance, 0],
-            "right": [0, -distance, 0],
-            "down": [-distance, 0, 0],
-            "up": [distance, 0, 0],
+            "left": [0, 0.02, 0],
+            "right": [0, -0.02, 0],
+            "down": [-0.02, 0, 0],
+            "up": [0.02, 0, 0],
         }[side]
 
         target_coord = world_coord + np.array(offset)
@@ -608,12 +586,6 @@ class ExperimentEnv:
 
         self.robot.single_hand_move(arm, target_coord, slow_mode=True)
 
-    def switch_hands(self, primary_arm="right"):
-        pass
-        """
-            move the nondominant hand to home to get it out of the way
-            then trace the cable 
-        """
 
     def route_cable(
         self,
@@ -623,12 +595,7 @@ class ExperimentEnv:
         dual_arm=True,
         save_viz=False,
     ):
-        """
-        routing is a list of the clips in order
-
-        first need to find the cable and grasp it
-        then go through each of the clips and route to that clip
-        """
+        
         MIN_DIST = 0.7
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
@@ -670,7 +637,6 @@ class ExperimentEnv:
                 grasp_arm=primary_arm,
                 display=display,
             )
-        # print(f"initial grasp index {initial_grasp_idx}")
 
         # move up to disentangle
         self.robot.go_delta([0, 0, 0.04], [0, 0, 0.04])
@@ -699,10 +665,12 @@ class ExperimentEnv:
 
             #     self.regrasp(arm="right", direction=-1)
 
+
         # finally just go to a pose above the final clip (x, y)
+        
+        z_offset = self.exp_config.grasp_cfg.z_offset
         self.robot.open_grippers(secondary_arm)
         self.robot.move_to_home(arm=secondary_arm)
-        z_offset = 0.035
         delta = {primary_arm: [0, 0, z_offset], secondary_arm: [0, 0, 0]}
         self.robot.go_delta(left_delta=delta["left"], right_delta=delta["right"])
         final_pixel_clip_coords = [end_clip["x"], end_clip["y"]]
@@ -740,15 +708,10 @@ class ExperimentEnv:
         curr_x, curr_y = curr_clip["x"], curr_clip["y"]
         prev_x, prev_y = prev_clip["x"], prev_clip["y"]
         next_x, next_y = next_clip["x"], next_clip["y"]
-        """
-            logic for how to route around a desired clip, want to move in the direction that will set up the next clip to be good
-        """
-        # sequence of left, right, up, down for a specific clip
 
-        def normalize(vec):
-            return vec / np.linalg.norm(vec)
 
-        def calculate_sequence_2():
+
+        def calculate_sequence():
             """
             hopefully this works better
             """
@@ -795,9 +758,10 @@ class ExperimentEnv:
             #         raise Exception(
             #             f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
             #         )
+            
             return sequence, -1 if is_clockwise else 1
 
-        sequence, rotation_dir = calculate_sequence_2()
+        sequence, rotation_dir = calculate_sequence()
         has_regrasped = 0
 
         for i, s in enumerate(sequence):

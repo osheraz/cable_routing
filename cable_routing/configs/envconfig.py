@@ -93,6 +93,14 @@ class ZedMiniConfig:
             [[self.fx, 0.0, self.cx], [0.0, self.fy, self.cy], [0.0, 0.0, 1.0]]
         )
 
+@dataclasses.dataclass(frozen=True)
+class GraspConfig:
+    offset_distance: int = 100
+    min_distance: int = 50
+    jump: int = 20
+    z_offset: float = 0.035
+    exclusion_radius: int = 50
+    resolution: str = "1080p"
 
 @dataclasses.dataclass
 class ExperimentConfig:
@@ -100,6 +108,7 @@ class ExperimentConfig:
     camera_cfg: BrioConfig
     robot_cfg: YuMiConfig
     board_cfg: EnvConfig
+    grasp_cfg: GraspConfig
 
     cam_to_robot_right_trans_path: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "cameras/zed_to_world_right.tf"
