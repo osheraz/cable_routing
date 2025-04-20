@@ -9,7 +9,8 @@ from cable_routing.configs.envconfig import ExperimentConfig
 
 
 class ClipPlacementGUI:
-    def __init__(self):
+    def __init__(self, presaved_img=None):
+        # if presaved_img is None:
         rospy.init_node("clip_placement_tool")
         self.zed_cam = ZedCameraSubscriber()
         cfg = ExperimentConfig

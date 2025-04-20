@@ -24,7 +24,6 @@ def mask_clip_region(image, clip, mask_size=30):
 
     return mask
 
-
 def center_pixels_on_cable(image, pixels, num_options=10, display=False):
     image_mask = image[:, :, 0] > 100
     kernel = np.ones((2, 2), np.uint8)

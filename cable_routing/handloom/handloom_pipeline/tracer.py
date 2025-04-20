@@ -592,10 +592,11 @@ class Tracer:
 
                 cv2.imshow("disp_img", disp_img)
                 cv2.waitKey(1)
-                plt.imsave(
-                    f"{save_folder}/{idx}_disp_img_{iter}.png",
-                    cv2.cvtColor(disp_img, cv2.COLOR_BGR2RGB),
-                )
+                if save_folder is not None:
+                    plt.imsave(
+                        f"{save_folder}/{idx}_disp_img_{iter}.png",
+                        cv2.cvtColor(disp_img, cv2.COLOR_BGR2RGB),
+                    )
 
                 scaling_factor = 5
                 new_shape = tuple(np.array(model_np.shape[:2]) * scaling_factor)
@@ -636,7 +637,8 @@ class Tracer:
 
                 cv2.imshow("input_output", canvas)
                 cv2.waitKey(1)
-                plt.imsave(f"{save_folder}/{idx}_input_output_{iter}.png", canvas)
+                if save_folder is not None:
+                    plt.imsave(f"{save_folder}/{idx}_input_output_{iter}.png", canvas)
 
         # Stoping case 4 : reached map steps
         max_sums = find_crossings(image, path)
@@ -710,10 +712,11 @@ class Tracer:
         if viz:
             img_cp = (img.copy() * 255.0).astype(np.uint8)
             trace_viz = self.visualize_path(raw_img, spline.copy())
-            plt.imsave(
-                f"{save_folder}/trace_{idx}.png",
-                cv2.cvtColor(trace_viz, cv2.COLOR_BGR2RGB),
-            )
+            if save_folder is not None:
+                plt.imsave(
+                    f"{save_folder}/trace_{idx}.png",
+                    cv2.cvtColor(trace_viz, cv2.COLOR_BGR2RGB),
+                )
 
         spline = np.array(spline)
         # spline = np.concatenate((starting_points, spline), axis=0)

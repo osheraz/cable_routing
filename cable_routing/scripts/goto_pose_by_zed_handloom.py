@@ -15,13 +15,16 @@ def main(args: ExperimentConfig):
     rospy.init_node("handloom_integration")
     env = ExperimentEnv(args)
 
-    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path()
-    
+    path_in_pixels, path_in_world, cable_orientations = env.update_cable_path(
+        user_pick=True,
+        display=True,
+        
+    )
+
     grasp_in_pixels, grasp_in_world, idx = env.grasp_cable_node(
         path_in_pixels, cable_orientations, arm="right", display=False
     )
     env.robot.move_to_home()
-
 
 
 if __name__ == "__main__":

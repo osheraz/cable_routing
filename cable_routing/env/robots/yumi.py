@@ -10,7 +10,7 @@ import time
 
 
 class YuMiRobotEnv:
-    def __init__(self, robot_config, speed=0.15):
+    def __init__(self, robot_config, speed=0.15, gripper_opening=4):
         print("[YUMI_JACOBI] Initializing YuMi...")
 
         self.robot_config = robot_config
@@ -18,26 +18,26 @@ class YuMiRobotEnv:
         self.interface = Interface(speed=speed)
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
-        self.gripper_opening = 4
+        self.gripper_opening = gripper_opening
 
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
 
         # max rotation limits wrt to the home position
-        initial_left_rot = self.robot_config.LEFT_HOME_POS[-1] * 180 / np.pi
-        initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1] * 180 / np.pi
+        # initial_left_rot = self.robot_config.LEFT_HOME_POS[-1] * 180 / np.pi
+        # initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1] * 180 / np.pi
 
-        self.rotation_limits = {
-            "right": (-90 + initial_right_rot, 270 + initial_right_rot),
-            "left": (-270 + initial_left_rot, 90 + initial_left_rot),
-        }
+        # self.rotation_limits = {
+        #     "right": (-90 + initial_right_rot, 270 + initial_right_rot),
+        #     "left": (-270 + initial_left_rot, 90 + initial_left_rot),
+        # }
 
         # self.close_grippers()
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
-    def move_to_home(self, arm=None) -> None:
-        """Moves the specified arm to the home position. If no arm is specified, moves both arms to home."""
+    def move_to_home(self, arm: Literal["both", "left", "right"] = "both") -> None:
+        """Moves the specified arm to the home position. Default is both."""
         self.set_speed("normal")
 
         lz, rz = (
@@ -45,7 +45,7 @@ class YuMiRobotEnv:
             self.get_ee_pose()[1].translation[2],
         )
 
-        if arm is None:
+        if arm == 'both':
             if lz < 0.1 or rz < 0.1:
                 self.go_delta(
                     left_delta=(0, 0, 0.05 if lz < 0.1 else 0),
@@ -71,43 +71,45 @@ class YuMiRobotEnv:
                 left_positions=None,
                 right_positions=self.robot_config.RIGHT_HOME_POS,
             )
+        else:
+            raise ValueError(f'Recieved invalid parameter {arm=} for move_to_home')
 
     def close_grippers(
-        self, side: Literal["both", "left", "right"] = "both", wait: bool = False
+        self, arm: Literal["both", "left", "right"] = "both", wait: bool = False
     ):
         """Closes both grippers."""
-        self.interface.close_grippers(side)
+        self.interface.close_grippers(arm)
         if wait:
             time.sleep(1.0)
 
-    def open_grippers(self, side: Literal["both", "left", "right"] = "both"):
+    def open_grippers(self, arm: Literal["both", "left", "right"] = "both"):
         """Closes both grippers."""
-        self.interface.open_grippers(side)
+        self.interface.open_grippers(arm)
 
-    def grippers_move_to(self, hand: Literal["left", "right", "both"], distance: int):
+    def grippers_move_to(self, arm: Literal["left", "right", "both"], distance: int):
         """
         Move the specified gripper(s) to the given width [0, 25] (mm).
 
         Parameters:
-        - hand (str): "left", "right", or "both" to specify which gripper(s) to move.
+        - arm (str): "left", "right", or "both" to specify which gripper(s) to move.
         - distance (int): Desired gripper opening width in mm.
         """
         left, right = self.get_gripper_pose("both")
         distance = int(distance)
 
-        if hand == "left":
+        if arm == "left":
             self.interface.grippers_move_to(left_dist=distance, right_dist=right)
-        elif hand == "right":
+        elif arm == "right":
             self.interface.grippers_move_to(left_dist=left, right_dist=distance)
-        elif hand == "both":
+        elif arm == "both":
             self.interface.grippers_move_to(left_dist=distance, right_dist=distance)
         else:
             raise ValueError(
-                "Invalid hand argument. Choose from 'left', 'right', or 'both'."
+                "Invalid arm argument. Choose from 'left', 'right', or 'both'."
             )
 
     def get_gripper_pose(
-        self, hand: Literal["left", "right", "both"]
+        self, arm: Literal["left", "right", "both"]
     ) -> Union[int, Tuple[int, int]]:
         """
         Get the current gripper position.
@@ -119,23 +121,23 @@ class YuMiRobotEnv:
         - int: If querying a single gripper, returns its position in mm.
         - Tuple[int, int]: If querying both, returns a tuple (left_gripper, right_gripper).
         """
-        if hand == "left":
+        if arm == "left":
             return int(self.interface.driver_left.get_gripper_pos() * 1000)
-        elif hand == "right":
+        elif arm == "right":
             return int(self.interface.driver_right.get_gripper_pos() * 1000)
-        elif hand == "both":
+        elif arm == "both":
             return (
                 int(self.interface.driver_left.get_gripper_pos() * 1000),
                 int(self.interface.driver_right.get_gripper_pos() * 1000),
             )
         else:
             raise ValueError(
-                "Invalid hand argument. Choose from 'left', 'right', or 'both'."
+                "Invalid arm argument. Choose from 'left', 'right', or 'both'."
             )
 
     def plan_linear_waypoints(
         self,
-        arms: Literal["left", "right", "both"],
+        arm: Literal["left", "right", "both"],
         start_pose_l: Optional[RigidTransform] = None,
         end_pose_l: Optional[RigidTransform] = None,
         start_pose_r: Optional[RigidTransform] = None,
@@ -143,8 +145,8 @@ class YuMiRobotEnv:
     ) -> List:
         """Plans linear waypoints for one or both arms."""
         return self.interface.plan_linear_waypoints(
-            l_targets=[start_pose_l, end_pose_l] if arms in ["left", "both"] else [],
-            r_targets=[start_pose_r, end_pose_r] if arms in ["right", "both"] else [],
+            l_targets=[start_pose_l, end_pose_l] if arm in ["left", "both"] else [],
+            r_targets=[start_pose_r, end_pose_r] if arm in ["right", "both"] else [],
         )
 
     def execute_trajectory(
@@ -155,7 +157,7 @@ class YuMiRobotEnv:
 
     def plan_and_execute_linear_waypoints(
         self,
-        arms: Literal["left", "right", "both"],
+        arm: Literal["left", "right", "both"],
         waypoints: Union[
             List[RigidTransform],  # Single arm (left or right)
             Tuple[List[RigidTransform], List[RigidTransform]],  # Both arms
@@ -164,26 +166,30 @@ class YuMiRobotEnv:
         l_targets = []
         r_targets = []
 
-        if arms == "left":
+        if arm == "left":
             if not isinstance(waypoints, list):
                 raise ValueError(
                     "For left arm, waypoints must be a single list of RigidTransforms"
                 )
             l_targets = waypoints
 
-        elif arms == "right":
+        elif arm == "right":
             if not isinstance(waypoints, list):
                 raise ValueError(
                     "For right arm, waypoints must be a single list of RigidTransforms"
                 )
             r_targets = waypoints
 
-        elif arms == "both":
+        elif arm == "both":
             if not isinstance(waypoints, tuple) or len(waypoints) != 2:
                 raise ValueError(
                     "For both arms, waypoints must be a tuple: (left_waypoints, right_waypoints)"
                 )
             l_targets, r_targets = waypoints
+        else:
+            raise ValueError(
+                "Invalid arm argument. Choose from 'left', 'right', or 'both'."
+            )
 
         # Plan and execute trajectory
         trajectories = self.interface.plan_linear_waypoints(
@@ -191,7 +197,7 @@ class YuMiRobotEnv:
             r_targets=r_targets,
         )
 
-        if arms == "right" or arms == "left":
+        if arm == "right" or arm == "left":
             self.interface.run_trajectory(
                 l_trajectory=trajectories[0] if l_targets else None,
                 r_trajectory=trajectories[1] if r_targets else None,
@@ -226,12 +232,12 @@ class YuMiRobotEnv:
             left_delta=left_delta or [0, 0, 0], right_delta=right_delta or [0, 0, 0]
         )
 
-    def get_gripper_rotation(self, arm):
+    def get_gripper_rotation(self, arm: Literal["left", "right"]):
         """
         returns the gripper rotation in degrees
         """
         rad_rot = self.interface.get_joint_positions(arm)[-1]
-        return rad_rot * 180 / np.pi
+        return rad_rot
 
     def rotate_gripper(
         self, angle: float, arm: Literal["left", "right", "both"]
@@ -266,17 +272,48 @@ class YuMiRobotEnv:
     def rotate_pose_by_rpy(
         self, pose: RigidTransform, roll: float, pitch: float, yaw: float
     ) -> RigidTransform:
-        """Rotates a given pose by roll, pitch, yaw in the parent coordinate system."""
+        """Returns the RigidTransform to rotate a given pose by roll, pitch, yaw in the parent coordinate system."""
         delta_rotation = RigidTransform.rotation_from_axis_angle([roll, pitch, yaw])
         new_rotation = pose.rotation @ delta_rotation
         return RigidTransform(rotation=new_rotation, translation=pose.translation)
 
     def go_delta_action(
         self,
-        action_xyz: Optional[Tuple[float, float, float]] = None,
-        action_theta: Optional[Tuple[float, float, float]] = None,
+        # arm:Literal['left', 'right', 'both'] = 'both',
+
+        action_xyz: Optional[Union[Tuple[float, float, float]]] = None,
+        action_theta: Optional[Union[Tuple[float, float, float]]] = None,
     ) -> None:
-        """Applies a position and orientation delta action to the end effector."""
+        """Applies a position and orientation delta action to the end effector. Moves both arms together."""
+
+        # l_targets = []
+        # r_targets = []
+
+        # if arm == "left":
+        #     if not isinstance(waypoints, list):
+        #         raise ValueError(
+        #             "For left arm, waypoints must be a single list of RigidTransforms"
+        #         )
+        #     l_targets = waypoints
+
+        # elif arm == "right":
+        #     if not isinstance(waypoints, list):
+        #         raise ValueError(
+        #             "For right arm, waypoints must be a single list of RigidTransforms"
+        #         )
+        #     r_targets = waypoints
+
+        # elif arm == "both":
+        #     if not isinstance(waypoints, tuple) or len(waypoints) != 2:
+        #         raise ValueError(
+        #             "For both arms, waypoints must be a tuple: (left_waypoints, right_waypoints)"
+        #         )
+        #     l_targets, r_targets = waypoints
+        # else:
+        #     raise ValueError(
+        #         "Invalid arm argument. Choose from 'left', 'right', or 'both'."
+        #     )
+
         action_xyz = action_xyz or (0.0, 0.0, 0.0)
         action_theta = action_theta or (0.0, 0.0, 0.0)
 
@@ -489,7 +526,9 @@ class YuMiRobotEnv:
         target_center: np.ndarray,
         slow_mode: bool = False,
     ) -> None:
-
+        """
+        Moves both arms, while maintaining the same translational distance between them.
+        """
         current_left, current_right = self.get_ee_pose()
         displacement_vector = (current_left.translation - current_right.translation) / 2
         new_left = target_center + displacement_vector

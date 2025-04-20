@@ -28,8 +28,8 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     get_perpendicular_orientation,
     get_path_angle,
     find_nearest_white_pixel,
-    normalize
-)  
+    normalize,
+)
 from cable_routing.env.ext_camera.utils.pcl_utils import (
     project_points_to_image,
     get_rotation_matrix,
@@ -57,6 +57,7 @@ class ExperimentEnv:
             rospy.sleep(0.1)
             rospy.loginfo("Waiting for images from ZED camera...")
 
+        #camera to base transform
         self.T_CAM_BASE = {
             "left": RigidTransform.load(
                 exp_config.cam_to_robot_left_trans_path
@@ -78,7 +79,6 @@ class ExperimentEnv:
 
         self.workspace_img = self.zed_cam.get_rgb().copy()
 
-
     def adjust_extrinsic(self, arm="right", roll=0.0, pitch=0.0, yaw=0.0):
 
         rotation_tilt = get_rotation_matrix(roll, pitch, yaw)
@@ -86,7 +86,7 @@ class ExperimentEnv:
 
     def get_extrinsic(self, arm="right"):
 
-        return self.T_CAM_BASE["right"]
+        return self.T_CAM_BASE[arm]
 
     def set_board_region(self, img=None):
 
@@ -132,13 +132,21 @@ class ExperimentEnv:
                 # abort = input("Abort? (y/n): ") == "y"
 
     def update_cable_path(
-        self, arm="right", start_points=None, end_points=None, display=False
+        self,
+        arm="right",
+        start_points=None,
+        end_points=None,
+        user_pick=False,
+        display=False,
     ):
 
         # TODO convert_path_to_world_coord is w.r.t the right arm.
-        
+
         path_in_pixels, _ = self.trace_cable(
-            start_points=start_points, end_points=end_points, viz=display
+            start_points=start_points,
+            end_points=end_points,
+            user_pick=user_pick,
+            viz=display,
         )
 
         self.board.set_cable_path(path_in_pixels)
@@ -320,9 +328,9 @@ class ExperimentEnv:
             # find the nearest clip to trace
 
             offset_distance = self.exp_config.grasp_cfg.offset_distance
-            min_distance = self.exp_config.grasp_cfg.min_distance  
-            jump = self.exp_config.grasp_cfg.jump  
-            exclusion_radius = self.exp_config.grasp_cfg.exclusion_radius  
+            min_distance = self.exp_config.grasp_cfg.min_distance
+            jump = self.exp_config.grasp_cfg.jump
+            exclusion_radius = self.exp_config.grasp_cfg.exclusion_radius
 
             clip_positions = [
                 np.array([clip["x"], clip["y"]])
@@ -351,10 +359,10 @@ class ExperimentEnv:
                     np.linalg.norm(move_to_pixel_follow - clip) >= exclusion_radius
                     for clip in clip_positions
                 ):
-                    break 
+                    break
                 next_idx += jump
 
-                if next_idx >= len(path): 
+                if next_idx >= len(path):
                     break
 
                 move_to_pixel_follow = np.array(path[next_idx])
@@ -363,7 +371,6 @@ class ExperimentEnv:
                 move_to_pixel_follow, _ = find_nearest_point(
                     path, pick_target_on_path(frame, path)
                 )
-
 
         world_coord_grasp = get_world_coord_from_pixel_coord(
             move_to_pixel_grasp,
@@ -586,7 +593,6 @@ class ExperimentEnv:
 
         self.robot.single_hand_move(arm, target_coord, slow_mode=True)
 
-
     def route_cable(
         self,
         routing: list,
@@ -595,7 +601,7 @@ class ExperimentEnv:
         dual_arm=True,
         save_viz=False,
     ):
-        
+
         MIN_DIST = 0.7
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
@@ -630,7 +636,7 @@ class ExperimentEnv:
             )
 
         else:
-            
+
             _, _, secondary_initial_grasp_idx = self.dual_grasp_cable_node(
                 path_in_pixels,
                 cable_orientations,
@@ -665,9 +671,8 @@ class ExperimentEnv:
 
             #     self.regrasp(arm="right", direction=-1)
 
-
         # finally just go to a pose above the final clip (x, y)
-        
+
         z_offset = self.exp_config.grasp_cfg.z_offset
         self.robot.open_grippers(secondary_arm)
         self.robot.move_to_home(arm=secondary_arm)
@@ -708,8 +713,6 @@ class ExperimentEnv:
         curr_x, curr_y = curr_clip["x"], curr_clip["y"]
         prev_x, prev_y = prev_clip["x"], prev_clip["y"]
         next_x, next_y = next_clip["x"], next_clip["y"]
-
-
 
         def calculate_sequence():
             """
@@ -758,7 +761,7 @@ class ExperimentEnv:
             #         raise Exception(
             #             f"Clip {curr_clip_id} cannot fit between {prev_clip_id} and {next_clip_id}"
             #         )
-            
+
             return sequence, -1 if is_clockwise else 1
 
         sequence, rotation_dir = calculate_sequence()
@@ -1409,14 +1412,21 @@ class ExperimentEnv:
         # )
 
     def trace_cable(
-        self, img=None, start_points=None, end_points=None, viz=False, user_pick=False
+        self,
+        img=None,
+        start_points=None,
+        end_points=None,
+        viz=False,
+        user_pick=False,
+        save=False,
     ):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_folder = f"{self.exp_config.save_folder}/run_{timestamp}"
 
-        if viz:
+        if viz and save:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_folder = f"{self.exp_config.save_folder}/run_{timestamp}"
             os.makedirs(save_folder, exist_ok=True)
-
+        else:
+            save_folder = None
         p1, p2 = self.board.point1, self.board.point2
 
         clips = list(self.board.get_clips().values())
@@ -1431,6 +1441,7 @@ class ExperimentEnv:
 
         if start_points == None and user_pick:
             start_points = select_target_point(img, rule="start")
+            filtered_points = [start_points]
         else:
             nearest_clip = self.board.get_clips()["A"]
             nearest_clip["x"] -= p1[0]
@@ -1453,7 +1464,7 @@ class ExperimentEnv:
         print("Start points", start_points)
 
         print(f"Starting trace at start point: {start_points}")
-        for att in range(len(filtered_points)):
+        for _ in range(len(filtered_points)):
             try:
                 path, status = self.tracer.trace(
                     img=img.copy(),

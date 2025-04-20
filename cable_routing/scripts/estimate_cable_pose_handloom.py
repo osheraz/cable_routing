@@ -41,7 +41,7 @@ def main():
     print("O3D Intrinsic:", intrinsic.intrinsic_matrix)
 
     T_CAM_BASE = (
-        RigidTransform.load("/home/osheraz/cable_routing/data/zed/zed_to_world.tf")
+        RigidTransform.load("/home/osherexp/cable_routing/data/zed/zed_to_world.tf")
         .as_frames(from_frame="zed", to_frame="base_link")
         .matrix
     )

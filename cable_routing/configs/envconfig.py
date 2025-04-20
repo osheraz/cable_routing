@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union, Dict
 import pathlib
 import tyro
 import dataclasses
@@ -43,6 +43,12 @@ class YuMiConfig:
         0.9777185412546022,
         -1.5255711909534435,
     )
+
+    #rotation limits in radians
+    ROTATION_LIMITS: Dict[str, Tuple[float, float]] = {
+        'left':(0.343212488639, 6.62639779582),
+        'right':(-6.23796017134, 0.0452251358415)
+    }
 
 
 @dataclasses.dataclass(frozen=True)
