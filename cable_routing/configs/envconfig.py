@@ -2,6 +2,7 @@ from typing import Literal, Optional, Tuple, Union, Dict
 import pathlib
 import tyro
 import dataclasses
+from dataclasses import field
 from autolab_core import RigidTransform, Point
 import numpy as np
 import os
@@ -25,7 +26,7 @@ class EnvConfig:
 class YuMiConfig:
     YUMI_MIN_POS: Tuple[float, ...] = (-2.94, -2.00, -2.94, -2.16, -5.06, -1.54, -4.00)
     LEFT_HOME_POS: Tuple[float, ...] = (
-        -0.9172001362743418,
+        -1.0172001362743418,
         -1.0366493693300391,
         1.5004868766459873,
         -0.25395203410733785,
@@ -45,10 +46,10 @@ class YuMiConfig:
     )
 
     #rotation limits in radians
-    ROTATION_LIMITS: Dict[str, Tuple[float, float]] = {
+    ROTATION_LIMITS: Dict[str, Tuple[float, float]] = field(default_factory=lambda:{
         'left':(0.343212488639, 6.62639779582),
         'right':(-6.23796017134, 0.0452251358415)
-    }
+    })
 
 
 @dataclasses.dataclass(frozen=True)

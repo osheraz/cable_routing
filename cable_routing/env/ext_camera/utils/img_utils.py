@@ -51,7 +51,6 @@ def center_pixels_on_cable(image, pixels, num_options=10, display=False):
 
     return np.array(processed_pixels)
 
-
 def find_nearest_white_pixel(image, clip, num_options=10, display=False):
     if len(image.shape) == 3:
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)

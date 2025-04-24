@@ -144,7 +144,7 @@ class YuMiRobotEnv:
         end_pose_r: Optional[RigidTransform] = None,
     ) -> List:
         """Plans linear waypoints for one or both arms."""
-        return self.interface.plan_linear_waypoints(
+        return self.interface.plan_cartesian_waypoints(
             l_targets=[start_pose_l, end_pose_l] if arm in ["left", "both"] else [],
             r_targets=[start_pose_r, end_pose_r] if arm in ["right", "both"] else [],
         )

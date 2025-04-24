@@ -12,11 +12,16 @@ def main(args: ExperimentConfig):
     env = ExperimentEnv(args)
     env.robot.open_grippers()
 
-    routing = ["A", "E", "I"]
+    routing = ["A", "C", "E", "I"]
 
-    env.route_cable(
-            routing, display=False, dual_arm=True, primary_arm="left", save_viz=False
-        )
+    # env.route_cable(
+    #         routing, display=False, dual_arm=True, primary_arm="right", save_viz=False
+    #     )
+
+    print(env.get_nearest_analytic_grasp_point((1155, 538)))
+    print(env.get_nearest_analytic_grasp_point((758, 420)))
+
+    env.perform_nearest_analytic_grasp_dual((1155, 538), (758, 420), visualize=True)
     
     exit()
 
@@ -24,4 +29,3 @@ def main(args: ExperimentConfig):
 if __name__ == "__main__":
     args = tyro.cli(ExperimentConfig)
     main(args)
-

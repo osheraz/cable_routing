@@ -46,8 +46,6 @@ class Cable:
         """
         
         
-        abs_value = lambda x: x if x > 0 else -x
-
         if environment != None:
             self.keypoints = []
             for point in self.quantized:
@@ -64,7 +62,7 @@ class Cable:
                         xdiff = true_point[0]-feature.get_true_coordinate()[0]
                         ydiff = true_point[1]-feature.get_true_coordinate()[1]
                         direction = 0
-                        if abs_value(xdiff) > abs_value(ydiff):
+                        if abs(xdiff) > abs(ydiff):
                             if xdiff < 0:
                                 direction = 180
                         else:
