@@ -30,10 +30,10 @@ def main(args: ExperimentConfig):
 
     camera_info = rospy.wait_for_message("/zedm/zed_node/rgb/camera_info", CameraInfo)
 
-    arm = "right"  # if world_coord[1] < 0 else "left"
+    arm = "left"  # if world_coord[1] < 0 else "left"
 
     T_CAM_BASE = RigidTransform.load(
-        f"/home/osheraz/cable_routing/cable_routing/configs/cameras/zed_to_world_{arm}.tf"
+        f"/home/osherexp/cable_routing/cable_routing/configs/cameras/zed_to_world_{arm}.tf"
     ).as_frames(from_frame="zed", to_frame="base_link")
 
     CAM_INTR = CameraIntrinsics(
