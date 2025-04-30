@@ -27,6 +27,7 @@ class BRIOSensor:
         self._is_running = False
         self._crop = crop
         self._inpaint = inpaint
+        
         self.video = video
 
         # Load configuration

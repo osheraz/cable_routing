@@ -15,17 +15,13 @@ def main(args: ExperimentConfig):
     routing = ["A", "C", "E"]
 
     env.route_cable(
-            routing, 
-            display=False, 
-            dual_arm=True,
-            primary_arm="left",
-            save_viz=False
-        )
-    
+        routing, display=False,
+         dual_arm=True, primary_arm="right", save_viz=False
+    )
+
     exit()
 
 
 if __name__ == "__main__":
     args = tyro.cli(ExperimentConfig)
     main(args)
-
