@@ -15,7 +15,7 @@ class BoardPlanner:
         config_path=None,
         resolution=20.0,
         robot_radius=30.0,
-        inflation_radius=40.0,
+        inflation_radius=30.0,
         show_animation=False,
     ):
         self.show_animation = show_animation
@@ -39,8 +39,6 @@ class BoardPlanner:
 
         ox, oy = [], []
         clips = self.board.get_clips()
-        print("printing clips")
-        print(clips)
 
         for id, clip in clips.items():
             clip_x = clip["x"] - self.p1[0]

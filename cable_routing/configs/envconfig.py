@@ -19,7 +19,6 @@ class EnvConfig:
     above_clip_1: RigidTransform = RigidTransform(
         rotation=[[-1, 0, 0], [0, 1, 0], [0, 0, -1]], translation=[0.3, -0.2, 0.15]
     )
-    # TODO ..
 
 
 @dataclasses.dataclass(frozen=True)
@@ -45,11 +44,13 @@ class YuMiConfig:
         -1.5255711909534435,
     )
 
-    #rotation limits in radians
-    ROTATION_LIMITS: Dict[str, Tuple[float, float]] = field(default_factory=lambda:{
-        'left':(0.343212488639, 6.62639779582),
-        'right':(-6.23796017134, 0.0452251358415)
-    })
+    # rotation limits in radians
+    ROTATION_LIMITS: Dict[str, Tuple[float, float]] = field(
+        default_factory=lambda: {
+            "left": (0.343212488639, 6.62639779582),
+            "right": (-6.23796017134, 0.0452251358415),
+        }
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -100,6 +101,7 @@ class ZedMiniConfig:
             [[self.fx, 0.0, self.cx], [0.0, self.fy, self.cy], [0.0, 0.0, 1.0]]
         )
 
+
 @dataclasses.dataclass(frozen=True)
 class GraspConfig:
     offset_distance: int = 100
@@ -107,7 +109,19 @@ class GraspConfig:
     jump: int = 20
     z_offset: float = 0.035
     exclusion_radius: int = 50
-    resolution: str = "1080p"
+
+    x_min: float = 0.0
+    x_max: float = 0.6
+    y_min: float = -0.4
+    y_max: float = 0.4
+    z_min: float = 0.0
+    z_max: float = 0.3
+
+    z_slide: float = 0.1
+    y_threshold: float = 0.1
+    offset_vector: Tuple[float, ...] = (0.1, 0.1, 0.1)
+
+
 
 @dataclasses.dataclass
 class ExperimentConfig:

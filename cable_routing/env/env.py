@@ -39,6 +39,64 @@ from cable_routing.handloom.handloom_pipeline.tracer import (
 )
 
 
+def need_regrasp(curr_x, next_x, arm):
+    curr_dir = next_x - curr_x
+    if curr_dir > 0 and arm == "left":
+        return True
+    elif curr_dir < 0 and arm == "left":
+        return False
+    elif curr_dir > 0 and arm == "right":
+        return False
+    else:
+        return True
+
+
+def calculate_sequence(curr_clip, prev_clip, next_clip):
+    """
+    determines how to wrap around a give clip
+    """
+
+    curr_x, curr_y = curr_clip["x"], curr_clip["y"]
+    prev_x, prev_y = prev_clip["x"], prev_clip["y"]
+    next_x, next_y = next_clip["x"], next_clip["y"]
+
+    num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
+    dir2num = {val: key for key, val in num2dir.items()}
+    clip_vecs = np.array([[0, 1, 0], [1, 0, 0], [0, -1, 0], [-1, 0, 0]])
+    prev2curr = normalize(np.array([curr_x - prev_x, -(curr_y - prev_y), 0]))
+    curr2prev = -prev2curr
+    curr2next = normalize(np.array([next_x - curr_x, -(next_y - curr_y), 0]))
+    clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
+    is_clockwise = np.cross(prev2curr, curr2next)[-1] > 0
+
+    net_vector = curr2prev + curr2next
+    if abs(net_vector[0]) > abs(net_vector[1]):
+        if net_vector[0] > 0:
+            middle_node = dir2num["left"]
+        else:
+            middle_node = dir2num["right"]
+    else:
+        if net_vector[1] > 0:
+            middle_node = dir2num["down"]
+        else:
+            middle_node = dir2num["up"]
+
+    if is_clockwise:
+        sequence = [
+            num2dir[(middle_node + 1) % 4],
+            num2dir[middle_node],
+            num2dir[(middle_node - 1) % 4],
+        ]
+    else:
+        sequence = [
+            num2dir[(middle_node - 1) % 4],
+            num2dir[middle_node],
+            num2dir[(middle_node + 1) % 4],
+        ]
+
+    return sequence, -1 if is_clockwise else 1
+
+
 class ExperimentEnv:
 
     def __init__(
@@ -51,7 +109,6 @@ class ExperimentEnv:
         self.robot = YuMiRobotEnv(exp_config.robot_cfg)
         rospy.sleep(2.0)
 
-        # todo: add cfg support for this
         self.zed_cam = ZedCameraSubscriber()
         while self.zed_cam.rgb_image is None or self.zed_cam.depth_image is None:
             rospy.sleep(0.1)
@@ -137,16 +194,16 @@ class ExperimentEnv:
         start_points=None,
         end_points=None,
         user_pick=False,
+        save_vis=False,
         display=False,
     ):
-
-        # TODO convert_path_to_world_coord is w.r.t the right arm.
 
         path_in_pixels, _ = self.trace_cable(
             start_points=start_points,
             end_points=end_points,
             user_pick=user_pick,
             viz=display,
+            save=save_vis,
         )
 
         self.board.set_cable_path(path_in_pixels)
@@ -305,9 +362,8 @@ class ExperimentEnv:
         user_pick=False,
         display=False,
     ):
-        follow_arm = "right" if grasp_arm=="left" else "left"
-        print(f'{follow_arm=}, {grasp_arm}')
-        print(f'{cable_orientations=}')
+        follow_arm = "right" if grasp_arm == "left" else "left"
+
         path_in_world_grasp = self.convert_path_to_world_coord(path, arm=grasp_arm)
         path_in_world_follow = self.convert_path_to_world_coord(path, arm=follow_arm)
 
@@ -456,63 +512,6 @@ class ExperimentEnv:
 
         return move_to_pixel_grasp, world_coord_grasp, idx
 
-    def goto_clip_node(self, arm, side="up", single_hand=True, display=False):
-
-        frame = self.zed_cam.get_rgb()
-
-        move_to_pixel = select_target_point(frame, rule="clip")
-
-        # clip = self.board.find_nearest_clip([move_to_pixel])
-        # clip_ori = clip["orientation"]
-        # move_to_pixel = [clip["x"], clip["y"]]
-
-        world_coord = get_world_coord_from_pixel_coord(
-            move_to_pixel,
-            self.zed_cam.intrinsic,
-            self.T_CAM_BASE[arm],
-            # depth_map=self.zed_cam.get_depth(),
-            # is_clip=True,
-        )
-
-        offset = {
-            "left": [0, 0.02, 0],
-            "right": [0, -0.02, 0],
-            "down": [-0.02, 0, 0],
-            "up": [0.02, 0, 0],
-        }[side]
-
-        target_coord = world_coord + np.array(offset)
-
-        path_arr = np.array(
-            self.convert_path_to_world_coord(self.board.cable_positions)
-        )
-
-        if display:
-            plt.figure()
-            plt.plot(path_arr[:, 0], path_arr[:, 1], "bo-")
-            plt.plot(world_coord[0], world_coord[1], "gx", markersize=10)
-            plt.plot(target_coord[0], target_coord[1], "rx", markersize=10)
-            plt.arrow(
-                world_coord[0],
-                world_coord[1],
-                offset[0],
-                offset[1],
-                head_width=0.01,
-                head_length=0.015,
-                fc="r",
-                ec="r",
-            )
-            plt.axis("equal")
-            plt.grid(True)
-            plt.show()
-
-            self.robot.go_delta(
-                left_delta=[0, 0, 0.05] if arm == "left" else None,
-                right_delta=[0, 0, 0.05] if arm == "right" else None,
-            )
-
-        self.robot.single_hand_move(arm, target_coord, slow_mode=True)
-
     def route_cable(
         self,
         routing: list[str],
@@ -522,18 +521,21 @@ class ExperimentEnv:
         save_viz=False,
     ):
 
+        # get the pixel position of all the clips
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
 
+        # trace cable
         path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
-            display=save_viz,
+            save_vis=save_viz,
+            display=display,
             arm=primary_arm,
         )
 
         secondary_arm = "left" if primary_arm == "right" else "right"
-
         initial_grasp_idx = -1
 
+        # grasp the cable with 1/2 hands
         if not dual_arm:
             primary_pixel_coord, primary_world_coord, main_initial_grasp_idx = (
                 self.grasp_cable_node(
@@ -552,10 +554,12 @@ class ExperimentEnv:
                 display=display,
             )
 
-        # move up to disentangle
+        # move up a bit to disentangle
         self.robot.go_delta([0, 0, 0.04], [0, 0, 0.04])
 
+        # apply routing
         for i in range(1, len(routing) - 1):
+            # break each clip into 3 segments.
             seq, primary_arm = self.route_around_clip(
                 routing[i - 1],
                 routing[i],
@@ -568,20 +572,20 @@ class ExperimentEnv:
                 display=display,
             )
 
+        # closing ceremony - finally just go to a pose above the final clip (x, y)
         secondary_arm = "left" if primary_arm == "right" else "right"
-        # finally just go to a pose above the final clip (x, y)
         z_offset = self.exp_config.grasp_cfg.z_offset
         self.robot.open_grippers(secondary_arm)
         self.robot.move_to_home(arm=secondary_arm)
+
         delta = {primary_arm: [0, 0, z_offset], secondary_arm: [0, 0, 0]}
         self.robot.go_delta(left_delta=delta["left"], right_delta=delta["right"])
         final_pixel_clip_coords = [end_clip["x"], end_clip["y"]]
+
         final_clip_coords = get_world_coord_from_pixel_coord(
             final_pixel_clip_coords,
             self.zed_cam.intrinsic,
             self.T_CAM_BASE[secondary_arm],
-            # depth_map=self.zed_cam.get_depth(),
-            # is_clip=True,
         )
 
         final_clip_coords[2] = z_offset
@@ -595,80 +599,25 @@ class ExperimentEnv:
         curr_clip_id: str,
         next_clip_id: str,
         path_in_pixels,
-        # path_in_world,
         cable_orientations,
         idx,
         arm,
         dual_arm=False,
         display=False,
     ):
+
         clips = self.board.get_clips()
         curr_clip = clips[curr_clip_id]
         prev_clip = clips[prev_clip_id]
         next_clip = clips[next_clip_id]
 
-        curr_x, curr_y = curr_clip["x"], curr_clip["y"]
-        prev_x, prev_y = prev_clip["x"], prev_clip["y"]
-        next_x, next_y = next_clip["x"], next_clip["y"]
-
-        def calculate_sequence():
-            """
-            determines how to wrap around a give clip
-            """
-
-            num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
-            dir2num = {val: key for key, val in num2dir.items()}
-            clip_vecs = np.array([[0, 1, 0], [1, 0, 0], [0, -1, 0], [-1, 0, 0]])
-            prev2curr = normalize(np.array([curr_x - prev_x, -(curr_y - prev_y), 0]))
-            curr2prev = -prev2curr
-            curr2next = normalize(np.array([next_x - curr_x, -(next_y - curr_y), 0]))
-            clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
-            is_clockwise = np.cross(prev2curr, curr2next)[-1] > 0
-
-            net_vector = curr2prev + curr2next
-            if abs(net_vector[0]) > abs(net_vector[1]):
-                if net_vector[0] > 0:
-                    middle_node = dir2num["left"]
-                else:
-                    middle_node = dir2num["right"]
-            else:
-                if net_vector[1] > 0:
-                    middle_node = dir2num["down"]
-                else:
-                    middle_node = dir2num["up"]
-
-            if is_clockwise:
-                sequence = [
-                    num2dir[(middle_node + 1) % 4],
-                    num2dir[middle_node],
-                    num2dir[(middle_node - 1) % 4],
-                ]
-            else:
-                sequence = [
-                    num2dir[(middle_node - 1) % 4],
-                    num2dir[middle_node],
-                    num2dir[(middle_node + 1) % 4],
-                ]
-
-            return sequence, -1 if is_clockwise else 1
-
-        def need_regrasp(curr_x, next_x, arm):
-            curr_dir = next_x-curr_x
-            if curr_dir>0 and arm=='left':
-                return True
-            elif curr_dir<0 and arm=='left':
-                return False
-            elif curr_dir>0 and arm=='right':
-                return False
-            else:
-                return True
-        sequence, rotation_dir = calculate_sequence()
-        has_regrasped = 0
-
+        # get the sequence - clock\counterclockwise rotation
+        sequence, _ = calculate_sequence(curr_clip, prev_clip, next_clip)
 
         for i, s in enumerate(sequence):
 
             print("Sliding", i, s)
+
             self.slideto_cable_node(
                 path_in_pixels,
                 cable_orientations,
@@ -681,44 +630,44 @@ class ExperimentEnv:
             )
 
             # TODO: Fix the regrasp metric; can't use curr_x, next_x
-            swap_arms = s =="left" or s=="right" #need_regrasp(curr_x, next_x, arm)
+            swap_arms = s == "left" or s == "right"  # need_regrasp(curr_x, next_x, arm)
             if swap_arms:
-                print("Swapping Arms")
-                arm = self.swap_arms(arm, fixture_dir=s)
+                arm = self.swap_arms(
+                    arm, prev_clip, curr_clip, next_clip, fixture_dir=s
+                )
 
         # if switch_hands:
         # print("Swapping Arms")
         # arm = self.swap_arms(arm)
 
+        # expected_rotation = (
+        #     self.robot.get_gripper_rotation(arm) + 180 * rotation_dir
+        # )
 
-            # expected_rotation = (
-            #     self.robot.get_gripper_rotation(arm) + 180 * rotation_dir
-            # )
+        # if expected_rotation < self.robot.rotation_limits[arm][0]:
+        #     print("REGRASPING")
+        #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
+        #     print(f"{expected_rotation=}")
+        #     print("Rotating with direction = 1 (positive rotation)")
+        #     self.regrasp(arm, direction=1)
+        #     has_regrasped = 1
+        #     print(f"{has_regrasped=}")
+        #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
 
-            # if expected_rotation < self.robot.rotation_limits[arm][0]:
-            #     print("REGRASPING")
-            #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
-            #     print(f"{expected_rotation=}")
-            #     print("Rotating with direction = 1 (positive rotation)")
-            #     self.regrasp(arm, direction=1)
-            #     has_regrasped = 1
-            #     print(f"{has_regrasped=}")
-            #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
-
-            #     print()
-            # elif expected_rotation > self.robot.rotation_limits[arm][1]:
-            #     print("REGRASPING")
-            #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
-            #     print(f"{expected_rotation=}")
-            #     print("Rotating with direction = -1 (positive rotation)")
-            #     self.regrasp(arm, direction=-1)
-            #     has_regrasped = -1
-            #     print(f"{has_regrasped=}")
-            #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
-            # else:
-            #     print("NOT REGRASPING")
-            #     print("Current eef rotation", self.robot.get_gripper_rotation(arm))
-            #     print(f"{expected_rotation=}")
+        #     print()
+        # elif expected_rotation > self.robot.rotation_limits[arm][1]:
+        #     print("REGRASPING")
+        #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
+        #     print(f"{expected_rotation=}")
+        #     print("Rotating with direction = -1 (positive rotation)")
+        #     self.regrasp(arm, direction=-1)
+        #     has_regrasped = -1
+        #     print(f"{has_regrasped=}")
+        #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
+        # else:
+        #     print("NOT REGRASPING")
+        #     print("Current eef rotation", self.robot.get_gripper_rotation(arm))
+        #     print(f"{expected_rotation=}")
 
         return sequence, arm
 
@@ -745,7 +694,6 @@ class ExperimentEnv:
         )
 
         if single_hand:
-
             self.execute_slide_to_cable_node(
                 plan["waypoints"],
                 plan["target_coord"],
@@ -753,7 +701,6 @@ class ExperimentEnv:
                 arm=arm,
             )
         else:
-            # add Literal - both.
             self.execute_dual_slide_to_cable_node(
                 plan["waypoints"],
                 plan["target_coord"],
@@ -843,7 +790,6 @@ class ExperimentEnv:
             goal_pixel=goal_pixel,
         )
 
-        print(f"waypoints {waypoints_in_pixels}")
         waypoints = self.convert_path_to_world_coord(waypoints_in_pixels, arm=arm)
 
         if display:
@@ -1021,7 +967,7 @@ class ExperimentEnv:
         target_coord,
         cable_orientations,
         arm,
-        will_regrasp = False,
+        will_regrasp=False,
         display=False,
     ):
 
@@ -1032,14 +978,15 @@ class ExperimentEnv:
         current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
 
-        x_min, x_max = 0.0, 0.6
-        y_min, y_max = -0.4, 0.4
-        z_min, z_max = 0.0, 0.3
+        x_min, x_max = self.exp_config.grasp_cfg.x_min, self.exp_config.grasp_cfg.x_max
+        y_min, y_max = self.exp_config.grasp_cfg.y_min, self.exp_config.grasp_cfg.y_max
 
-        offset_vector = np.array([0.1, 0.1, 0.1])
         waypoints_secondary = []
 
-        y_threshold = 0.1 
+        y_threshold = self.exp_config.grasp_cfg.y_threshold
+
+        # Second hand motion is tangential
+        # SketchyCheck - Make sure there's no collsion between the hands
 
         for i in range(len(waypoints) - 1):
 
@@ -1047,7 +994,7 @@ class ExperimentEnv:
             motion_direction /= np.linalg.norm(motion_direction)
 
             secondary_wp = waypoints[i] + motion_direction * np.linalg.norm(
-                offset_vector
+                self.exp_config.grasp_cfg.offset_vector
             )
 
             if waypoints_secondary:
@@ -1066,7 +1013,7 @@ class ExperimentEnv:
                 if y_min <= secondary_wp[1] <= y_max
                 else last_valid_wp[1]
             )
-            secondary_wp[2] = 0.1  # Keep Z constant
+            secondary_wp[2] = self.exp_config.grasp_cfg.z_slide  # Keep Z constant
 
             if arm == "right":
                 # Secondary arm must always have y >= primary arm + threshold
@@ -1083,6 +1030,7 @@ class ExperimentEnv:
                 curr_diff = secondary_wp[1] - waypoints[i][1]
 
                 # If sign changes, a crossing has occurred. Correct the position with threshold.
+                # TODO: should change this..
                 if prev_diff * curr_diff < 0:
                     if arm == "right":
                         secondary_wp[1] = waypoints[i][1] + y_threshold
@@ -1091,26 +1039,20 @@ class ExperimentEnv:
 
             waypoints_secondary.append(secondary_wp)
 
+        # open a bit
         self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening - 2)
         self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening - 2)
 
-        # calc only w.r.t the first arm
-        # cur_rot = np.deg2rad(self.robot.get_gripper_rotation(arm))
-
+        # eef slide is tangential to the path
         eef_orientations = [
             get_perpendicular_orientation(waypoints[i - 1], waypoints[i])
             for i in range(1, len(waypoints))
         ]
 
-        eef_orientations = [
-            np.array(e) for e in eef_orientations
-        ]
-
+        eef_orientations = [np.array(e) for e in eef_orientations]
         eef_orientations.append(eef_orientations[-1])
-
         eef_orientations = np.unwrap(eef_orientations)
         eef_orientations = np.mod(eef_orientations, 2 * np.pi).tolist()
-
 
         if display:
             path_arr = np.array(waypoints)
@@ -1164,34 +1106,41 @@ class ExperimentEnv:
             plt.title("Cable Path with Orientations")
             plt.show()
 
-        # Move to the first waypoint at the correct height
-        # self.robot.set_speed("slow")
-
-        poses = [
-            RigidTransform(translation=waypoint, rotation=current_pose.rotation)
-            for waypoint in [current_pose.translation, waypoints[0]]
-        ]
-
+        # Move first the second arm to the first pose  without rotation - required
         poses_secondary = [
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
         ]
 
-        self.robot.plan_and_execute_linear_waypoints(s_arm, waypoints=poses_secondary)
+        try:
+            self.robot.plan_and_execute_linear_waypoints(
+                s_arm, waypoints=poses_secondary
+            )
+        except:
+            print(1)
 
         poses_secondary = [
             RigidTransform(translation=wp, rotation=second_pose.rotation)
             for wp in waypoints_secondary
         ]
+
         # move secondary arm before moving primary arm to reduce the likelihood of cable tangling
-        # TODO check why 3
-        self.robot.plan_and_execute_linear_waypoints(
-            s_arm, waypoints=poses_secondary[0:3]
-        )
+        try:
+            self.robot.plan_and_execute_linear_waypoints(
+                s_arm, waypoints=poses_secondary[0:3]
+            )
+        except:
+            print(2)
+        # move the first arm to the first slide pose without rotation - required
+        poses = [
+            RigidTransform(translation=waypoint, rotation=current_pose.rotation)
+            for waypoint in [current_pose.translation, waypoints[0]]
+        ]
 
-
-        self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
-
+        try:
+            self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
+        except:
+            print(3)
         self.robot.set_speed("normal")
 
         # Align orientation to the first waypoint
@@ -1206,9 +1155,12 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
+        try:
+            self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
+        except:
+            print(4)
 
-        self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
-
+        # Finally, plan the whole motion
         poses = [
             RigidTransform(
                 translation=wp,
@@ -1223,200 +1175,236 @@ class ExperimentEnv:
             for wp in waypoints_secondary
         ]
 
-        # poses_secondary = [
-        #     RigidTransform(
-        #         translation=wp,
-        #         rotation=RigidTransform.x_axis_rotation(-np.pi)
-        #         @ RigidTransform.z_axis_rotation(-ori),
-        #     )
-        #     for wp, ori in zip(waypoints_secondary, eef_second_orientations)
-        # ]
-        # self.robot.plan_and_execute_linear_waypoints(
-        #     arms="left", waypoints=poses_secondary
-        # )
-
-        # exit()
-
         for i in range(len(poses) - 2):
-
-            # if arm == "right":
-            #     self.robot.plan_and_execute_linear_waypoints(
-            #         arms="both",
-            #         waypoints=(poses_secondary[i : i + 3], poses[i : i + 3]),
-            #     )
-            # else:
-            #     self.robot.plan_and_execute_linear_waypoints(
-            #         arms="both",
-            #         waypoints=(poses[i : i + 3], poses_secondary[i : i + 3]),
-            #     )
-
-
-            self.robot.plan_and_execute_linear_waypoints(
+            try:
+                self.robot.plan_and_execute_linear_waypoints(
                     arm, waypoints=poses[i : i + 3]
                 )
-
-
+            except:
+                print(5)
             if not i + 4 > len(poses_secondary):
-                self.robot.plan_and_execute_linear_waypoints(
-                    s_arm, waypoints=poses_secondary[i + 1 : i + 4]
-                )
 
-            # actual_pose_primary = self.robot.get_ee_pose()[0 if arm == "left" else 1]
-            # actual_pose_secondary = self.robot.get_ee_pose()[
-            #     1 if s_arm == "left" else 0
-            # ]
+                try:
+                    self.robot.plan_and_execute_linear_waypoints(
+                        s_arm, waypoints=poses_secondary[i + 1 : i + 4]
+                    )
+                except:
+                    print(6)
+        try:
+            self.robot.set_ee_pose(
+                left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
+                right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+            )
+        except:
+            print(7)
 
-            # error_primary = np.linalg.norm(
-            #     actual_pose_primary.translation - end_pose_primary.translation
-            # )
-            # error_secondary = np.linalg.norm(
-            #     actual_pose_secondary.translation - end_pose_secondary.translation
-            # )
+    def swap_arms(self, arm, prev_clip, curr_clip, next_clip, fixture_dir):
+        """
+        Go down, let go with both arms, record pixel position of each,
+        swap rolls, then call the analytic grasp finder function
+        """
+        curr_x, curr_y = curr_clip["x"], curr_clip["y"]
+        prev_x, prev_y = prev_clip["x"], prev_clip["y"]
+        next_x, next_y = next_clip["x"], next_clip["y"]
+        s_arm = "left" if arm == "right" else "right"
 
-            # print(f"Step {i+1}:")
-            # print(f"  Primary Pose deviation = {error_primary:.4f} meters")
-            # print(f"  Secondary Pose deviation = {error_secondary:.4f} meters")
+        print("Swapping")
 
-        self.robot.set_ee_pose(
-            left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
-            right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+        eefs_pose = self.robot.get_ee_pose()
+        current_pose = eefs_pose[0 if arm == "left" else 1]
+        second_pose = eefs_pose[1 if arm == "left" else 0]
+        init_arm_pose = current_pose.copy()
+
+        # release the second arm - maybe move the safe position.
+
+        new_second_pose = second_pose.copy()
+        new_second_pose.translation[2] = 0.01
+        s_arm = "left" if arm == "right" else "right"
+        poses_dict = {arm: None, s_arm: new_second_pose}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
+        self.robot.open_grippers(arm=s_arm)
+
+        # slide the first arm to safe position
+        align_pose = current_pose.copy()
+        align_pose.translation[2] = 0.0
+        if next_x > curr_x:
+            align_pose.translation[0] = min(
+                current_pose.translation[0] + 0.25, self.exp_config.grasp_cfg.x_max
+            )
+        else:
+            align_pose.translation[0] = max(
+                current_pose.translation[0] - 0.25, self.exp_config.grasp_cfg.x_min
+            )
+        poses_dict = {arm: align_pose, s_arm: None}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
+
+        # now the y value.
+        # eefs_pose = self.robot.get_ee_pose()
+        # second_pose = eefs_pose[1 if arm == "left" else 0]
+        # # Determine new Y position: move above or below current_pose
+        # if curr_y > next_y:
+        #     align_pose.translation[1] = max(
+        #         current_pose.translation[1] - 0.15, self.exp_config.grasp_cfg.y_min
+        #     )
+        # else:
+        #     align_pose.translation[1] = min(
+        #         current_pose.translation[1] + 0.15, self.exp_config.grasp_cfg.y_max
+        #     )
+
+        # poses_dict = {arm: align_pose, s_arm: None}
+        # self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
+        # second_pose = self.robot.get_ee_pose()[1 if arm == "left" else 0]
+
+        # Move down both to the board - slightlty above clips
+
+        # self.robot.rotate_gripper(angle=-np.pi / 2, arm=s_arm)
+        # self.robot.rotate_gripper(angle=np.pi / 2, arm=s_arm)
+
+        # Both home at this point.
+        s_arm_pixel_pose = project_points_to_image(
+            np.array([init_arm_pose.translation]),
+            self.zed_cam.intrinsic._K,
+            self.T_CAM_BASE[s_arm],
+            self.workspace_img.shape[:2],
+        )[0]
+
+        self.perform_nearest_analytic_grasp_dual(
+            prev_grasp_point=None,
+            prev_follow_point=s_arm_pixel_pose,
+            grasp_arm="left" if arm == "left" else "right",
+            follow_arm="right" if arm == "left" else "left",
+            visualize=False,
         )
 
-        # for start_pose, end_pose in zip(poses, poses[1:]):
-        #     self.robot.plan_and_execute_linear_waypoints(
-        #         arm, waypoints=[start_pose, end_pose]
-        #     )
-        #     actual_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
-        #     error = np.linalg.norm(actual_pose.translation - end_pose.translation)
-        #     print(f"Pose deviation = {error:.4f} meters")
+        self.robot.grippers_move_to("left" if arm == "left" else "right", distance=self.robot.gripper_opening - 2)
 
-        # self.robot.set_ee_pose(
-        #     left_pose=(poses[-1] if arm == "left" else None),
-        #     right_pose=(poses[-1] if arm == "right" else None),
-        # )
+        return s_arm
 
-    def swap_arms(
-        self, arm, fixture_dir
-    ):
-        pass
+    def swap_arms_release(self, arm, prev_clip, curr_clip, next_clip, fixture_dir):
         """
-        Go down, let go with both arms, record pixel position of each, swap rolls, then call the analytic grasp finder function
+        Go down, let go with both arms, record pixel position of each,
+        swap rolls, then call the analytic grasp finder function
         """
+        curr_x, curr_y = curr_clip["x"], curr_clip["y"]
+        prev_x, prev_y = prev_clip["x"], prev_clip["y"]
+        next_x, next_y = next_clip["x"], next_clip["y"]
+        s_arm = "left" if arm == "right" else "right"
 
-        # Function: 
+        print("Swapping")
 
-        # align the second arm with offset
+        # first, move the supporting arm to safe release position
+        # shady - first move the x value
         eefs_pose = self.robot.get_ee_pose()
         current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
 
         align_pose = second_pose.copy()
-        # TODO: Update The line below to accommodate routings either away or toward the robot
-        align_pose.translation[0] = max(current_pose.translation[0] + 0.15, 0.6)
+        # align_pose.translation[0] = min(
+        #     current_pose.translation[0] + 0.15, self.exp_config.grasp_cfg.x_max
+        # )
 
-        s_arm = 'left' if arm=='right' else 'right'
-        
-        poses_dict = {arm:current_pose,
-                      s_arm:align_pose}
-        
-        self.robot.set_ee_pose(poses_dict['left'], poses_dict['right'])
-        ######################
+        # Determine new X position: move to the side of current_pose
+        if next_x > curr_x:
+            align_pose.translation[0] = min(
+                current_pose.translation[0] + 0.15, self.exp_config.grasp_cfg.x_max
+            )
+        else:
+            align_pose.translation[0] = max(
+                current_pose.translation[0] - 0.15, self.exp_config.grasp_cfg.x_min
+            )
 
-        # 
+        poses_dict = {arm: None, s_arm: align_pose}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
+
+        # now the y value.
         eefs_pose = self.robot.get_ee_pose()
-        current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
+        # Determine new Y position: move above or below current_pose
+        if curr_y > next_y:
+            align_pose.translation[1] = max(
+                current_pose.translation[1] - 0.15, self.exp_config.grasp_cfg.y_min
+            )
+        else:
+            align_pose.translation[1] = min(
+                current_pose.translation[1] + 0.15, self.exp_config.grasp_cfg.y_max
+            )
 
-        align_pose.translation[1] = current_pose.translation[1]
-        poses_dict = {arm:current_pose,
-                      s_arm:align_pose}
-        self.robot.set_ee_pose(poses_dict['left'], poses_dict['right'])
-        self.robot.rotate_gripper(angle = -np.pi/2, arm= s_arm)
+        poses_dict = {arm: None, s_arm: align_pose}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
+        second_pose = self.robot.get_ee_pose()[1 if arm == "left" else 0]
 
-        eefs_pose = self.robot.get_ee_pose()
-        current_pose = eefs_pose[0 if arm == "left" else 1]
-        second_pose = eefs_pose[1 if arm == "left" else 0]
-
-        #
+        # Move down both to the board - slightlty above clips
         new_pose = current_pose.copy()
-        new_pose.translation[2] = -0.02
+        current_pose.translation[2] = 0.01
         new_second_pose = second_pose.copy()
-        new_second_pose.translation[2] = -0.02
+        new_second_pose.translation[2] = 0.01
+        s_arm = "left" if arm == "right" else "right"
+        poses_dict = {arm: new_pose, s_arm: new_second_pose}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
 
-        s_arm = 'left' if arm=='right' else 'right'
-        poses_dict = {arm:new_pose,
-                      s_arm:new_second_pose}
-        self.robot.set_ee_pose(poses_dict['left'], poses_dict['right'])
-
-
-        # self.robot.go_delta([0,0,0.0], [0,0,0.04])
-        # self.robot.go_delta([0,0,0.04], [0,0,0.0])
-
-        # Move up, go_delta not working
+        # Jiggle Jiggle - second arm
         self.robot.open_grippers(arm=s_arm)
+        # self.robot.rotate_gripper(angle=-np.pi / 2, arm=s_arm)
+        # self.robot.rotate_gripper(angle=np.pi / 2, arm=s_arm)
+
+        # Move up and then home - second arm
         eefs_pose = self.robot.get_ee_pose()
         primary_pose = eefs_pose[0 if arm == "left" else 1]
         secondary_pose = eefs_pose[1 if arm == "left" else 0]
 
-        second_pose.translation[2] += 0.1
-        poses_dict = {arm:primary_pose,
-                      s_arm:secondary_pose}
-        self.robot.set_ee_pose(poses_dict['left'], poses_dict['right'])
+        last_s_pose = secondary_pose.copy()  # record for grasp retrace
 
-        s_pose = self.robot.get_ee_pose()[1 if arm == "left" else 0]
-        s_pose.translation[0] -= 0.05
+        secondary_pose.translation[2] += 0.1
+        poses_dict = {arm: None, s_arm: secondary_pose}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
         self.robot.move_to_home(arm=s_arm)
 
-        eefs_pose = self.robot.get_ee_pose()
-        primary_pose = eefs_pose[0 if arm == "left" else 1]
-        secondary_pose = eefs_pose[1 if arm == "left" else 0]
+        # # First arm  - move a bit from the clip
+        # if fixture_dir == "left":
+        #     primary_pose.translation[1] += 0.04
+        # else:
+        #     primary_pose.translation[1] += 0.04
+        # poses_dict = {arm: primary_pose, s_arm: None}
+        # self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
 
-        if fixture_dir == "left":
-            primary_pose.translation[1] += 0.04
-        else:
-            primary_pose.translation[1] -= 0.04
-        
-        poses_dict = {arm:primary_pose,
-                      s_arm:secondary_pose}
-        self.robot.set_ee_pose(poses_dict['left'], poses_dict['right'])
+        last_arm_pose = primary_pose.copy()
 
+        # Jiggle Jiggle - arm
         self.robot.open_grippers(arm=arm)
+        # self.robot.rotate_gripper(angle=-np.pi / 2, arm=arm)
+        # self.robot.rotate_gripper(angle=np.pi / 2, arm=arm)
+
+        # Move up - them home - first arm
         eefs_pose = self.robot.get_ee_pose()
-        primary_pose = eefs_pose[0 if arm == "left" else 1]
-        secondary_pose = eefs_pose[1 if arm == "left" else 0]
-
+        primary_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
         primary_pose.translation[2] += 0.1
-        poses_dict = {arm:primary_pose,
-                      s_arm:secondary_pose}
-        self.robot.set_ee_pose(poses_dict['left'], poses_dict['right'])
-
-        
-        arm_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
+        poses_dict = {arm: primary_pose, s_arm: None}
+        self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
         self.robot.move_to_home(arm=arm)
 
-
-
+        # Both home at this point.
         arm_pixel_pose = project_points_to_image(
-            np.array([arm_pose.translation]),
+            np.array([last_arm_pose.translation]),
             self.zed_cam.intrinsic._K,
             self.T_CAM_BASE[arm],
             self.workspace_img.shape[:2],
         )[0]
 
         s_arm_pixel_pose = project_points_to_image(
-            np.array([s_pose.translation]),
+            np.array([last_s_pose.translation]),
             self.zed_cam.intrinsic._K,
             self.T_CAM_BASE[s_arm],
             self.workspace_img.shape[:2],
         )[0]
 
-        self.perform_nearest_analytic_grasp_dual(prev_grasp_point=s_arm_pixel_pose,
-                                                 prev_follow_point=arm_pixel_pose,
-                                                 grasp_arm="left" if arm == "left" else "right",
-                                                 follow_arm="right" if arm == "left" else "left",
-                                                 visualize=True
-                                                 )
-        return s_arm #new primary arm
+        self.perform_nearest_analytic_grasp_dual(
+            prev_grasp_point=s_arm_pixel_pose,
+            prev_follow_point=arm_pixel_pose,
+            grasp_arm="left" if arm == "left" else "right",
+            follow_arm="right" if arm == "left" else "left",
+            visualize=False,
+        )
+        return s_arm
 
     def trace_cable(
         self,
@@ -1467,8 +1455,6 @@ class ExperimentEnv:
                 )
             ]
             start_points = random.choice(filtered_points)
-
-        print("Start points", start_points)
 
         print(f"Starting trace at start point: {start_points}")
         status = None
@@ -1583,18 +1569,35 @@ class ExperimentEnv:
 
         return path, status
 
+    def is_cable_pixel(self, gray, pos, threshold=100, use_erode=True):
+        x, y = pos
+
+        if use_erode:
+            kernel = np.ones((3, 3), np.uint8)
+            gray = cv2.erode(gray, kernel, iterations=1)
+
+        if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
+            return gray[y, x] > threshold
+        else:
+            return False
+
     def get_nearest_analytic_grasp_point(self, start_point, img=None, visualize=False):
-        '''
-        Finds the nearest grasp point on the cable to a given position (start_point) using the analytic 
+        """
+        Finds the nearest grasp point on the cable to a given position (start_point) using the analytic
         color thresholding method
 
         Arguments:
         start_point ((int, int)): coordinates of the point to find a nearby grasp to, in pixel space
         img (Image): Image to use for grasp identification, None by default
         visualize (bool): indicates whether or not to visualize the planned grasps
-        '''
+        """
         if img is None:
             img = self.zed_cam.rgb_image.copy()
+            if len(img.shape) == 3:
+                gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            else:
+                gray_img = img.copy()
+
         squared_magnitude = lambda my_tuple: sum([i**2 for i in my_tuple])
 
         x, y = start_point[0], start_point[1]
@@ -1611,7 +1614,11 @@ class ExperimentEnv:
 
         while heap:
             dist, pos = heapq.heappop(heap)
-            if squared_magnitude(img[pos[1]][pos[0]]) > 140000:
+            # if squared_magnitude(img[pos[1]][pos[0]]) > 140000:
+            #     x = pos[0]
+            #     y = pos[1]
+            #     break
+            if self.is_cable_pixel(gray_img, pos):
                 x = pos[0]
                 y = pos[1]
                 break
@@ -1633,8 +1640,8 @@ class ExperimentEnv:
         predicted_y = y
         predicted_orientation = 180 / np.pi * np.arctan2(delta_y, delta_x)
 
-
         if visualize:
+
             def draw_point(
                 img, x, y, label="Default", color=(0, 255, 255), orientation=0
             ):
@@ -1681,64 +1688,69 @@ class ExperimentEnv:
                 )
 
             draw_point(
-                    img_display,
-                    start_point[0],
-                    start_point[1],
-                    "Previous",
-                    (0, 0, 255),
-                    0
-                )
+                img_display, start_point[0], start_point[1], "Previous", (0, 0, 255), 0
+            )
             draw_point(
-                    img_display,
-                    predicted_x,
-                    predicted_y,
-                    "Planned",
-                    (255, 0, 0),
-                    predicted_orientation
-                )
-            
+                img_display,
+                predicted_x,
+                predicted_y,
+                "Planned",
+                (255, 0, 0),
+                predicted_orientation,
+            )
+
             cv2.imshow("Board Setup", img_display)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
         return (predicted_x, predicted_y), predicted_orientation
-    
+
     def perform_nearest_analytic_grasp_dual(
         self,
         prev_grasp_point,
         prev_follow_point,
         grasp_arm,
         follow_arm,
-        visualize=False
+        visualize=False,
     ):
         # grasp arm
-        move_to_pixel_grasp, cable_ori_grasp = self.get_nearest_analytic_grasp_point(prev_grasp_point, visualize=visualize)
-        cable_ori_grasp = np.deg2rad(-cable_ori_grasp + 90)
 
+        world_coord_follow, world_coord_grasp = None, None
+        cable_ori_follow, cable_ori_grasp = None, None
+        move_to_pixel_grasp = None
+
+        if prev_grasp_point is not None:
+            move_to_pixel_grasp, cable_ori_grasp = (
+                self.get_nearest_analytic_grasp_point(
+                    prev_grasp_point, visualize=visualize
+                )
+            )
+            cable_ori_grasp = np.deg2rad(-cable_ori_grasp + 90)
+
+            world_coord_grasp = get_world_coord_from_pixel_coord(
+                move_to_pixel_grasp,
+                self.zed_cam.intrinsic,
+                self.T_CAM_BASE[grasp_arm],
+            )
         # follow_arm
-        move_to_pixel_follow, cable_ori_follow = self.get_nearest_analytic_grasp_point(prev_follow_point, visualize=visualize)
-        cable_ori_follow = np.deg2rad(-cable_ori_follow + 90)
+        if prev_follow_point is not None:
+            move_to_pixel_follow, cable_ori_follow = (
+                self.get_nearest_analytic_grasp_point(
+                    prev_follow_point, visualize=visualize
+                )
+            )
+            cable_ori_follow = np.deg2rad(-cable_ori_follow + 270)
 
-        
-        world_coord_grasp = get_world_coord_from_pixel_coord(
-            move_to_pixel_grasp,
-            self.zed_cam.intrinsic,
-            self.T_CAM_BASE[grasp_arm],
-        )
+            world_coord_follow = get_world_coord_from_pixel_coord(
+                move_to_pixel_follow,
+                self.zed_cam.intrinsic,
+                self.T_CAM_BASE[follow_arm],
+            )
 
-        world_coord_follow = get_world_coord_from_pixel_coord(
-            move_to_pixel_follow,
-            self.zed_cam.intrinsic,
-            self.T_CAM_BASE[follow_arm],
-        )
-
-        
         world_coords = {
             "left": world_coord_follow if follow_arm == "left" else world_coord_grasp,
             "right": world_coord_follow if follow_arm == "right" else world_coord_grasp,
         }
-
-        print(cable_ori_grasp)
 
         eef_rots = {
             "left": cable_ori_follow if follow_arm == "left" else cable_ori_grasp,

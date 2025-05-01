@@ -472,16 +472,21 @@ class YuMiRobotEnv:
         if right_world_coord is not None:
             self.open_grippers("right")
 
-        self.grippers_move_to(grasp_arm, distance=10)
+        if right_world_coord is not None and left_world_coord is not None:
+            self.grippers_move_to(grasp_arm, distance=10)
 
         print("Moving both arms to target positions.")
 
-        rot_left = RigidTransform.x_axis_rotation(
-            -np.pi
-        ) @ RigidTransform.z_axis_rotation(-left_eef_rot)
-        rot_right = RigidTransform.x_axis_rotation(
-            -np.pi
-        ) @ RigidTransform.z_axis_rotation(-right_eef_rot)
+        if left_eef_rot is not None:
+            
+            rot_left = RigidTransform.x_axis_rotation(
+                -np.pi
+            ) @ RigidTransform.z_axis_rotation(-left_eef_rot)
+            
+        if right_eef_rot is not None:
+            rot_right = RigidTransform.x_axis_rotation(
+                -np.pi
+            ) @ RigidTransform.z_axis_rotation(-right_eef_rot)
 
         left_target_pose = (
             RigidTransform(rotation=rot_left, translation=left_world_coord)

@@ -1,4 +1,3 @@
-from tracemalloc import start
 import rospy
 import tyro
 from cable_routing.configs.envconfig import ExperimentConfig
@@ -12,11 +11,10 @@ def main(args: ExperimentConfig):
     env = ExperimentEnv(args)
     env.robot.open_grippers()
 
-    routing = ["A", "C", "E"]
+    routing = ["A", "C", "E", "F", "G"]
 
     env.route_cable(
-        routing, display=False,
-         dual_arm=True, primary_arm="right", save_viz=False
+        routing, display=False, dual_arm=True, primary_arm="right", save_viz=False
     )
 
     exit()

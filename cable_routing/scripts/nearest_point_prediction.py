@@ -147,6 +147,19 @@ class NearestPointGUI:
             1,
         )
 
+    def is_cable_pixel(self, gray, pos, threshold=100, use_erode=True):
+        x, y = pos
+
+        if use_erode:
+            kernel = np.ones((3, 3), np.uint8)
+            gray = cv2.erode(gray, kernel, iterations=1)
+
+        if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
+            return gray[y, x] > threshold
+        else:
+            return False
+        
+    
     def run(self):
         while True:
             img_display = self.render_annotations()
@@ -170,7 +183,11 @@ class NearestPointGUI:
 
         x, y = start_point[0], start_point[1]
         image = self.image
-
+        if len(image.shape) == 3:
+            gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray_img = image.copy()
+            
         directions = sum([[(a, b) for a in [-1, 0, 1]] for b in [-1, 0, 1]], start=[])
 
         heap = [(0, (x, y))]
@@ -183,7 +200,11 @@ class NearestPointGUI:
 
         while heap:
             dist, pos = heapq.heappop(heap)
-            if squared_magnitude(image[pos[1]][pos[0]]) > 170000:
+            # if squared_magnitude(image[pos[1]][pos[0]]) > 170000:
+            #     x = pos[0]
+            #     y = pos[1]
+            #     break
+            if self.is_cable_pixel(gray_img, pos):
                 x = pos[0]
                 y = pos[1]
                 break
