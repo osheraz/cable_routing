@@ -38,6 +38,25 @@ from cable_routing.handloom.handloom_pipeline.tracer import (
     TraceEnd,
 )
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+import traceback
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def run_with_timeout(func, timeout=2, *args, **kwargs):
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout)
+        except FuturesTimeout:
+            print(
+                f"[Timeout] Function `{func.__name__}` timed out after {timeout} seconds."
+            )
+        except Exception as e:
+            print(f"[Error] Function `{func.__name__}` raised: {e}")
+            traceback.print_exc()
+
 
 def need_regrasp(curr_x, next_x, arm):
     curr_dir = next_x - curr_x
@@ -133,7 +152,7 @@ class ExperimentEnv:
         rospy.logwarn("Env is ready")
 
         self.cable_in_arm = None
-
+        self.swapped = False
         self.workspace_img = self.zed_cam.get_rgb().copy()
 
     def adjust_extrinsic(self, arm, roll=0.0, pitch=0.0, yaw=0.0):
@@ -613,7 +632,7 @@ class ExperimentEnv:
 
         # get the sequence - clock\counterclockwise rotation
         sequence, _ = calculate_sequence(curr_clip, prev_clip, next_clip)
-
+        
         for i, s in enumerate(sequence):
 
             print("Sliding", i, s)
@@ -627,6 +646,7 @@ class ExperimentEnv:
                 single_hand=not dual_arm,
                 side=s,
                 display=display,
+                swapped=self.swapped,
             )
 
             # TODO: Fix the regrasp metric; can't use curr_x, next_x
@@ -635,7 +655,7 @@ class ExperimentEnv:
                 arm = self.swap_arms(
                     arm, prev_clip, curr_clip, next_clip, fixture_dir=s
                 )
-
+                self.swapped = True
         # if switch_hands:
         # print("Swapping Arms")
         # arm = self.swap_arms(arm)
@@ -682,6 +702,7 @@ class ExperimentEnv:
         clip_id=None,
         side="up",
         display=False,
+        swapped=False,
     ):
 
         plan = self.plan_slide_to_cable_node(
@@ -706,6 +727,7 @@ class ExperimentEnv:
                 plan["target_coord"],
                 cable_orientations,
                 arm=arm,
+                swapped=swapped,
             )
 
     def regrasp(self, arm, direction):
@@ -969,40 +991,50 @@ class ExperimentEnv:
         arm,
         will_regrasp=False,
         display=False,
+        swapped=False,
     ):
+        """
+        Plans and executes a dual-arm sliding motion along a cable path.
+        One arm performs the primary motion while the secondary arm follows a constrained,
+        tangential path to avoid interference or cable twisting.
+
+        Args:
+            waypoints: List of primary motion 3D coordinates.
+            target_coord: Target end point (unused here but could be for future refinement).
+            cable_orientations: Orientation hints for end-effector alignment (also not used here).
+            arm: The primary arm ('left' or 'right') to execute the motion.
+            will_regrasp: Flag for whether a regrasp is expected (unused here).
+            display: Whether to show a matplotlib plot of the path and orientations.
+        """
 
         s_arm = "right" if arm == "left" else "left"
 
+        # Get current end-effector poses for both arms
         eefs_pose = self.robot.get_ee_pose()
-
         current_pose = eefs_pose[0 if arm == "left" else 1]
         second_pose = eefs_pose[1 if arm == "left" else 0]
 
+        # Bounds and thresholds for secondary arm path generation
         x_min, x_max = self.exp_config.grasp_cfg.x_min, self.exp_config.grasp_cfg.x_max
         y_min, y_max = self.exp_config.grasp_cfg.y_min, self.exp_config.grasp_cfg.y_max
+        y_threshold = self.exp_config.grasp_cfg.y_threshold
 
         waypoints_secondary = []
 
-        y_threshold = self.exp_config.grasp_cfg.y_threshold
-
-        # Second hand motion is tangential
-        # SketchyCheck - Make sure there's no collsion between the hands
-
+        # Generate waypoints for the secondary arm to stay tangential to the path
         for i in range(len(waypoints) - 1):
-
             motion_direction = waypoints[i + 1] - waypoints[i]
             motion_direction /= np.linalg.norm(motion_direction)
-
             secondary_wp = waypoints[i] + motion_direction * np.linalg.norm(
                 self.exp_config.grasp_cfg.offset_vector
             )
 
-            if waypoints_secondary:
-                last_valid_wp = waypoints_secondary[-1]
-            else:
-                last_valid_wp = waypoints[i]
+            # Keep the last valid waypoint to enforce constraints
+            last_valid_wp = (
+                waypoints_secondary[-1] if waypoints_secondary else waypoints[i]
+            )
 
-            # Clip X and Y coordinates to stay within the defined bounds
+            # Clamp to defined workspace boundaries
             secondary_wp[0] = (
                 np.clip(secondary_wp[0], x_min, x_max)
                 if x_min <= secondary_wp[0] <= x_max
@@ -1015,22 +1047,16 @@ class ExperimentEnv:
             )
             secondary_wp[2] = self.exp_config.grasp_cfg.z_slide  # Keep Z constant
 
-            if arm == "right":
-                # Secondary arm must always have y >= primary arm + threshold
-                if secondary_wp[1] < waypoints[i][1] + y_threshold:
-                    secondary_wp[1] = waypoints[i][1] + y_threshold
-            elif arm == "left":
-                # Secondary arm must always have y <= primary arm - threshold
-                if secondary_wp[1] > waypoints[i][1] - y_threshold:
-                    secondary_wp[1] = waypoints[i][1] - y_threshold
+            # Enforce offset constraints to avoid collision between arms
+            if arm == "right" and secondary_wp[1] < waypoints[i][1] + y_threshold:
+                secondary_wp[1] = waypoints[i][1] + y_threshold
+            elif arm == "left" and secondary_wp[1] > waypoints[i][1] - y_threshold:
+                secondary_wp[1] = waypoints[i][1] - y_threshold
 
-            # Check for crossing between successive waypoints
+            # Prevent path crossing by checking sign of relative position change
             if i > 0:
                 prev_diff = waypoints_secondary[i - 1][1] - waypoints[i - 1][1]
                 curr_diff = secondary_wp[1] - waypoints[i][1]
-
-                # If sign changes, a crossing has occurred. Correct the position with threshold.
-                # TODO: should change this..
                 if prev_diff * curr_diff < 0:
                     if arm == "right":
                         secondary_wp[1] = waypoints[i][1] + y_threshold
@@ -1039,25 +1065,28 @@ class ExperimentEnv:
 
             waypoints_secondary.append(secondary_wp)
 
-        # open a bit
+        # Slightly open both grippers before motion
         self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening - 2)
         self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening - 2)
 
-        # eef slide is tangential to the path
+        # Compute end-effector orientation based on motion direction
         eef_orientations = [
             get_perpendicular_orientation(waypoints[i - 1], waypoints[i])
             for i in range(1, len(waypoints))
         ]
-
         eef_orientations = [np.array(e) for e in eef_orientations]
-        eef_orientations.append(eef_orientations[-1])
+        eef_orientations.append(eef_orientations[-1])  # Repeat last orientation
         eef_orientations = np.unwrap(eef_orientations)
         eef_orientations = np.mod(eef_orientations, 2 * np.pi).tolist()
+        
+        print(swapped)
+        if swapped:
+            eef_orientations = [(ori - np.pi) % (2 * np.pi) for ori in eef_orientations]
 
+        # Optional visualization of paths and orientations
         if display:
             path_arr = np.array(waypoints)
             path_arr2 = np.array(waypoints_secondary)
-
             plt.figure(figsize=(10, 8))
             plt.plot(path_arr[:, 0], path_arr[:, 1], "b-", label="Cable Path")
             plt.plot(path_arr2[:, 0], path_arr2[:, 1], "r-", label="Cable Path2")
@@ -1065,9 +1094,7 @@ class ExperimentEnv:
             for idx, (point, orientation) in enumerate(
                 zip(waypoints, eef_orientations)
             ):
-                dx = 0.02 * np.cos(orientation)
-                dy = 0.02 * np.sin(orientation)
-
+                dx, dy = 0.02 * np.cos(orientation), 0.02 * np.sin(orientation)
                 plt.arrow(
                     point[0],
                     point[1],
@@ -1083,9 +1110,7 @@ class ExperimentEnv:
             for idx, (point, orientation) in enumerate(
                 zip(waypoints_secondary, eef_orientations)
             ):
-                dx = 0.02 * np.cos(orientation)
-                dy = 0.02 * np.sin(orientation)
-
+                dx, dy = 0.02 * np.cos(orientation), 0.02 * np.sin(orientation)
                 plt.arrow(
                     point[0],
                     point[1],
@@ -1106,61 +1131,59 @@ class ExperimentEnv:
             plt.title("Cable Path with Orientations")
             plt.show()
 
-        # Move first the second arm to the first pose  without rotation - required
+        # Move secondary arm to start position (2-step motion)
         poses_secondary = [
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
         ]
+        print(1)
+        run_with_timeout(
+            self.robot.plan_and_execute_linear_waypoints,
+            4,
+            s_arm,
+            waypoints=poses_secondary,
+        )
 
-        try:
-            self.robot.plan_and_execute_linear_waypoints(
-                s_arm, waypoints=poses_secondary
-            )
-        except:
-            print(1)
-
+        # Advance secondary arm slightly before primary moves
         poses_secondary = [
             RigidTransform(translation=wp, rotation=second_pose.rotation)
             for wp in waypoints_secondary
         ]
+        print(2)
+        run_with_timeout(
+            self.robot.plan_and_execute_linear_waypoints,
+            4,
+            s_arm,
+            waypoints=poses_secondary[0:3],
+        )
 
-        # move secondary arm before moving primary arm to reduce the likelihood of cable tangling
-        try:
-            self.robot.plan_and_execute_linear_waypoints(
-                s_arm, waypoints=poses_secondary[0:3]
-            )
-        except:
-            print(2)
-        # move the first arm to the first slide pose without rotation - required
+        # Move primary arm to start position
         poses = [
             RigidTransform(translation=waypoint, rotation=current_pose.rotation)
             for waypoint in [current_pose.translation, waypoints[0]]
         ]
+        run_with_timeout(
+            self.robot.plan_and_execute_linear_waypoints, 4, arm, waypoints=poses
+        )
+        print(3)  # here
 
-        try:
-            self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
-        except:
-            print(3)
         self.robot.set_speed("normal")
 
-        # Align orientation to the first waypoint
+        # Align primary arm orientation to start of motion
         poses = [
-            RigidTransform(
-                translation=waypoints[0],
-                rotation=current_pose.rotation,
-            ),
+            RigidTransform(translation=waypoints[0], rotation=current_pose.rotation),
             RigidTransform(
                 translation=waypoints[0],
                 rotation=RigidTransform.x_axis_rotation(-np.pi)
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
-        try:
-            self.robot.plan_and_execute_linear_waypoints(arm, waypoints=poses)
-        except:
-            print(4)
+        run_with_timeout(
+            self.robot.plan_and_execute_linear_waypoints, 4, arm, waypoints=poses
+        )
+        print(4)
 
-        # Finally, plan the whole motion
+        # Prepare full motion paths for both arms
         poses = [
             RigidTransform(
                 translation=wp,
@@ -1169,34 +1192,37 @@ class ExperimentEnv:
             )
             for wp, ori in zip(waypoints, eef_orientations)
         ]
-
         poses_secondary = [
             RigidTransform(translation=wp, rotation=second_pose.rotation)
             for wp in waypoints_secondary
         ]
 
+        # Interleaved execution of both arms along the path (3-waypoint sliding windows)
         for i in range(len(poses) - 2):
-            try:
-                self.robot.plan_and_execute_linear_waypoints(
-                    arm, waypoints=poses[i : i + 3]
-                )
-            except:
-                print(5)
-            if not i + 4 > len(poses_secondary):
 
-                try:
-                    self.robot.plan_and_execute_linear_waypoints(
-                        s_arm, waypoints=poses_secondary[i + 1 : i + 4]
-                    )
-                except:
-                    print(6)
-        try:
-            self.robot.set_ee_pose(
-                left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
-                right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+            run_with_timeout(
+                self.robot.plan_and_execute_linear_waypoints,
+                4,
+                arm,
+                waypoints=poses[i : i + 3],
             )
-        except:
-            print(7)
+            print(5)
+            if not i + 4 > len(poses_secondary):
+                run_with_timeout(
+                    self.robot.plan_and_execute_linear_waypoints,
+                    4,
+                    s_arm,
+                    waypoints=poses_secondary[i + 1 : i + 4],
+                )
+                print(6)
+        # Final alignment of both arms at the end
+        run_with_timeout(
+            self.robot.set_ee_pose,
+            4,
+            left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
+            right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+        )
+        print(7)
 
     def swap_arms(self, arm, prev_clip, curr_clip, next_clip, fixture_dir):
         """
@@ -1276,7 +1302,10 @@ class ExperimentEnv:
             visualize=False,
         )
 
-        self.robot.grippers_move_to("left" if arm == "left" else "right", distance=self.robot.gripper_opening - 2)
+        self.robot.grippers_move_to(
+            "left" if arm == "left" else "right",
+            distance=self.robot.gripper_opening - 2,
+        )
 
         return s_arm
 
@@ -1726,7 +1755,7 @@ class ExperimentEnv:
                 )
             )
             cable_ori_grasp = np.deg2rad(-cable_ori_grasp + 90)
-
+            assert print("should be here")
             world_coord_grasp = get_world_coord_from_pixel_coord(
                 move_to_pixel_grasp,
                 self.zed_cam.intrinsic,
@@ -1739,7 +1768,7 @@ class ExperimentEnv:
                     prev_follow_point, visualize=visualize
                 )
             )
-            cable_ori_follow = np.deg2rad(-cable_ori_follow + 270)
+            cable_ori_follow = np.deg2rad(-cable_ori_follow + 90)  # (2 * np.pi)
 
             world_coord_follow = get_world_coord_from_pixel_coord(
                 move_to_pixel_follow,

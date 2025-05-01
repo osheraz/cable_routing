@@ -198,10 +198,11 @@ class YuMiRobotEnv:
         )
 
         if arm == "right" or arm == "left":
-            self.interface.run_trajectory(
-                l_trajectory=trajectories[0] if l_targets else None,
-                r_trajectory=trajectories[1] if r_targets else None,
-            )
+            if l_targets or r_targets:
+                self.interface.run_trajectory(
+                    l_trajectory=trajectories[0] if l_targets else None,
+                    r_trajectory=trajectories[1] if r_targets else None,
+                )
         else:  # "both"
             assert print("useless")
             self.interface.run_trajectories(trajectories)
