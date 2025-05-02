@@ -45,11 +45,11 @@ class YuMiRobotEnv:
             self.get_ee_pose()[1].translation[2],
         )
 
-        if arm == 'both':
+        if arm == "both":
             if lz < 0.1 or rz < 0.1:
                 self.go_delta(
-                    left_delta=(0, 0, 0.05 if lz < 0.1 else 0),
-                    right_delta=(0, 0, 0.05 if rz < 0.1 else 0),
+                    left_delta=(0, 0, 0.2 if lz < 0.1 else 0),
+                    right_delta=(0, 0, 0.2 if rz < 0.1 else 0),
                 )
             self.set_joint_positions(
                 left_positions=self.robot_config.LEFT_HOME_POS,
@@ -58,7 +58,7 @@ class YuMiRobotEnv:
 
         elif arm == "left":
             if lz < 0.1:
-                self.go_delta(left_delta=(0, 0, 0.05), right_delta=(0, 0, 0))
+                self.go_delta(left_delta=(0, 0, 0.2), right_delta=(0, 0, 0))
             self.set_joint_positions(
                 left_positions=self.robot_config.LEFT_HOME_POS,
                 right_positions=None,
@@ -66,13 +66,13 @@ class YuMiRobotEnv:
 
         elif arm == "right":
             if rz < 0.1:
-                self.go_delta(left_delta=(0, 0, 0), right_delta=(0, 0, 0.05))
+                self.go_delta(left_delta=(0, 0, 0), right_delta=(0, 0, 0.2))
             self.set_joint_positions(
                 left_positions=None,
                 right_positions=self.robot_config.RIGHT_HOME_POS,
             )
         else:
-            raise ValueError(f'Recieved invalid parameter {arm=} for move_to_home')
+            raise ValueError(f"Recieved invalid parameter {arm=} for move_to_home")
 
     def close_grippers(
         self, arm: Literal["both", "left", "right"] = "both", wait: bool = False
@@ -281,7 +281,6 @@ class YuMiRobotEnv:
     def go_delta_action(
         self,
         # arm:Literal['left', 'right', 'both'] = 'both',
-
         action_xyz: Optional[Union[Tuple[float, float, float]]] = None,
         action_theta: Optional[Union[Tuple[float, float, float]]] = None,
     ) -> None:
@@ -479,11 +478,11 @@ class YuMiRobotEnv:
         print("Moving both arms to target positions.")
 
         if left_eef_rot is not None:
-            
+
             rot_left = RigidTransform.x_axis_rotation(
                 -np.pi
             ) @ RigidTransform.z_axis_rotation(-left_eef_rot)
-            
+
         if right_eef_rot is not None:
             rot_right = RigidTransform.x_axis_rotation(
                 -np.pi
