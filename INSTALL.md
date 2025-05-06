@@ -57,6 +57,11 @@ roscore
 ```
 Should start a roscore instance
 
+## Install Zed drivers & Jacobi & HANDLOOM
+```bash
+todo
+```
+
 ## Install ABB Robot Driver and dependencies
 
 ### Building the Packages
