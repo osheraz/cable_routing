@@ -1,4 +1,0 @@
-test_outputs
-*.egg-info
-__pycache__
-wandb

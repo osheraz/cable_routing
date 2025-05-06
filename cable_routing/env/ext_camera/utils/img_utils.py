@@ -9,8 +9,23 @@ from mpl_toolkits.mplot3d import Axes3D
 SCALE_FACTOR = 1.0
 SAFE_HEIGHT = 0.002
 
+
 def normalize(vec):
     return vec / np.linalg.norm(vec)
+
+
+def is_cable_pixel(gray, pos, threshold=100, use_erode=True):
+    x, y = pos
+
+    if use_erode:
+        kernel = np.ones((3, 3), np.uint8)
+        gray = cv2.erode(gray, kernel, iterations=1)
+
+    if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
+        return gray[y, x] > threshold
+    else:
+        return False
+
 
 def mask_clip_region(image, clip, mask_size=30):
     mask = np.ones(image.shape[:2], dtype=np.uint8) * 255
@@ -23,6 +38,7 @@ def mask_clip_region(image, clip, mask_size=30):
                 mask[py, px] = 0
 
     return mask
+
 
 def center_pixels_on_cable(image, pixels, num_options=10, display=False):
     image_mask = image[:, :, 0] > 100
@@ -50,6 +66,7 @@ def center_pixels_on_cable(image, pixels, num_options=10, display=False):
         plt.show()
 
     return np.array(processed_pixels)
+
 
 def find_nearest_white_pixel(image, clip, num_options=10, display=False):
     if len(image.shape) == 3:

@@ -1,49 +1,37 @@
 {
     "A": {
-        "x": 1309,
-        "y": 641,
+        "x": 1311,
+        "y": 648,
         "type": 1,
         "orientation": 0
     },
     "B": {
-        "x": 1303,
-        "y": 559,
+        "x": 834,
+        "y": 607,
         "type": 1,
         "orientation": 0
     },
     "C": {
-        "x": 832,
-        "y": 604,
+        "x": 1066,
+        "y": 437,
         "type": 1,
         "orientation": 0
     },
     "D": {
         "x": 900,
-        "y": 403,
+        "y": 404,
         "type": 1,
         "orientation": 0
     },
     "E": {
-        "x": 1160,
-        "y": 370,
+        "x": 912,
+        "y": 117,
         "type": 1,
         "orientation": 0
     },
     "F": {
-        "x": 910,
-        "y": 112,
-        "type": 1,
-        "orientation": 0
-    },
-    "G": {
-        "x": 700,
+        "x": 704,
         "y": 86,
-        "type": 1,
-        "orientation": 0
-    },
-    "H": {
-        "x": 659,
-        "y": 625,
         "type": 1,
         "orientation": 0
     }

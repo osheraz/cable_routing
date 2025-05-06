@@ -122,7 +122,6 @@ class GraspConfig:
     offset_vector: Tuple[float, ...] = (0.1, 0.1, 0.1)
 
 
-
 @dataclasses.dataclass
 class ExperimentConfig:
 

@@ -29,6 +29,7 @@ from cable_routing.env.ext_camera.utils.img_utils import (
     get_path_angle,
     find_nearest_white_pixel,
     normalize,
+    is_cable_pixel,
 )
 from cable_routing.env.ext_camera.utils.pcl_utils import (
     project_points_to_image,
@@ -42,19 +43,22 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 import traceback
 import numpy as np
 import matplotlib.pyplot as plt
+from termcolor import colored, cprint
 
 
 def run_with_timeout(func, timeout=2, *args, **kwargs):
+    timeout = 10
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(func, *args, **kwargs)
         try:
             return future.result(timeout=timeout)
         except FuturesTimeout:
-            print(
-                f"[Timeout] Function `{func.__name__}` timed out after {timeout} seconds."
+            cprint(
+                f"[Timeout] Function `{func.__name__}` timed out after {timeout} seconds.",
+                "yellow",
             )
         except Exception as e:
-            print(f"[Error] Function `{func.__name__}` raised: {e}")
+            cprint(f"[Error] Function `{func.__name__}` raised: {e}", "yellow")
             traceback.print_exc()
 
 
@@ -155,6 +159,7 @@ class ExperimentEnv:
         self.board = Board(config_path=exp_config.board_cfg_path)
         rospy.logwarn("Env is ready")
 
+        self.accumulated_length_px = 0.0
         self.cable_in_arm = None
         self.swapped = False
         self.workspace_img = self.zed_cam.get_rgb().copy()
@@ -174,6 +179,44 @@ class ExperimentEnv:
             img = self.zed_cam.rgb_image
 
         _, self.point1, self.point2 = crop_board(img)
+
+    def compute_routing_length_px(self, routing):
+
+        clips = self.board.get_clips()
+
+        total_length = 0.0
+        for i in range(len(routing) - 1):
+            clip_a = clips[routing[i]]
+            clip_b = clips[routing[i + 1]]
+
+            ax, ay = clip_a["x"], clip_a["y"]
+            bx, by = clip_b["x"], clip_b["y"]
+
+            dist = np.linalg.norm(np.array([bx - ax, by - ay]))
+            total_length += dist
+
+        return total_length
+
+    def update_routing_progress_px(self, routing, current_idx):
+
+        if current_idx <= 0 or current_idx >= len(routing):
+            return
+
+        clips = self.board.get_clips()
+        a = np.array(
+            [clips[routing[current_idx - 1]]["x"], clips[routing[current_idx - 1]]["y"]]
+        )
+        b = np.array(
+            [clips[routing[current_idx]]["x"], clips[routing[current_idx]]["y"]]
+        )
+        self.accumulated_length_px += np.linalg.norm(b - a)
+
+        total = self.compute_routing_length_px(routing)
+        print(
+            f"[Progress] {self.accumulated_length_px:.1f} / {total:.1f} pixels routed"
+        )
+
+        return self.accumulated_length_px / total
 
     def check_calibration(self, arm):
         """we are going to poke all the clips/plugs etc"""
@@ -547,7 +590,7 @@ class ExperimentEnv:
         # get the pixel position of all the clips
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
-
+        progress = 0
         # trace cable
         path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
             save_vis=save_viz,
@@ -583,6 +626,7 @@ class ExperimentEnv:
         # apply routing
         for i in range(1, len(routing) - 1):
             # break each clip into 3 segments.
+
             seq, primary_arm = self.route_around_clip(
                 routing[i - 1],
                 routing[i],
@@ -593,7 +637,10 @@ class ExperimentEnv:
                 arm=primary_arm,
                 dual_arm=dual_arm,
                 display=display,
+                progress=progress,
             )
+
+            progress = self.update_routing_progress_px(routing, i)
 
         # closing ceremony - finally just go to a pose above the final clip (x, y)
         secondary_arm = "left" if primary_arm == "right" else "right"
@@ -627,6 +674,7 @@ class ExperimentEnv:
         arm,
         dual_arm=False,
         display=False,
+        progress=0.0,
     ):
 
         clips = self.board.get_clips()
@@ -639,7 +687,10 @@ class ExperimentEnv:
 
         for i, s in enumerate(sequence):
 
-            print("Sliding", i, s)
+            cprint(
+                f"Sliding {i}: --> {s}; From: {prev_clip_id}, Curr: {curr_clip_id}  Next: {next_clip_id}",
+                "green",
+            )
 
             self.slideto_cable_node(
                 path_in_pixels,
@@ -655,12 +706,15 @@ class ExperimentEnv:
 
             swap_arms = s == "left" or s == "right"
             swap_arms &= need_regrasp(curr_clip, next_clip, prev_clip, arm)
+            swap_arms &= progress < 0.5
 
             if swap_arms:
                 arm = self.swap_arms(
                     arm, prev_clip, curr_clip, next_clip, fixture_dir=s
                 )
                 self.swapped = not self.swapped
+                # skip "up"
+                break
 
         # old logic for regrasping
         # if switch_hands:
@@ -739,7 +793,8 @@ class ExperimentEnv:
 
     def regrasp(self, arm, direction):
         """
-        reorients gripper by going to the exact same position, but just with a 180 degree rotation in the ee
+        reorients gripper by going to the exact same position,
+        but just with a 180 degree rotation in the ee
         """
         secondary_arm = "right" if arm == "left" else "left"
         curr_secondary_pose = self.robot.get_ee_pose()[
@@ -1241,11 +1296,26 @@ class ExperimentEnv:
                     waypoints=poses_secondary[i + 1 : i + 4],
                 )
         # Final alignment of both arms at the end
+
+        # run_with_timeout(
+        #     self.robot.set_ee_pose,
+        #     4,
+        #     left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
+        #     right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+        # )
+
         run_with_timeout(
-            self.robot.set_ee_pose,
+            self.robot.plan_and_execute_linear_waypoints,
             4,
-            left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
-            right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+            s_arm,
+            waypoints=[poses_secondary[-1], poses_secondary[-1]],
+        )
+
+        run_with_timeout(
+            self.robot.plan_and_execute_linear_waypoints,
+            4,
+            arm,
+            waypoints=[poses[-1], poses[-1]],
         )
 
     def swap_arms(self, arm, prev_clip, curr_clip, next_clip, fixture_dir):
@@ -1258,7 +1328,9 @@ class ExperimentEnv:
         next_x, next_y = next_clip["x"], next_clip["y"]
         s_arm = "left" if arm == "right" else "right"
 
-        print("Swapping")
+        cprint(f"Before Swap: Leading = {arm}, Following = {s_arm}", "green")
+        cprint("Swapping...", "green")
+        cprint(f"After  Swap: Leading = {s_arm}, Following = {arm}", "green")
 
         eefs_pose = self.robot.get_ee_pose()
         current_pose = eefs_pose[0 if arm == "left" else 1]
@@ -1275,6 +1347,7 @@ class ExperimentEnv:
         self.robot.open_grippers(arm=s_arm)
 
         # slide the first arm to safe position
+        # TODO: actually it has to be with the routing directions
         align_pose = current_pose.copy()
         align_pose.translation[2] = 0.0
 
@@ -1510,7 +1583,7 @@ class ExperimentEnv:
             ]
             start_points = random.choice(filtered_points)
 
-        print(f"Starting trace at start point: {start_points}")
+        cprint(f"Starting trace at start point: {start_points}", "red")
         status = None
         for _ in range(len(filtered_points)):
             try:
@@ -1529,7 +1602,7 @@ class ExperimentEnv:
                 print("Failed to trace with Analytical Tracer, trying again :(")
                 continue
 
-        print("Tracing status:", status)
+        cprint(f"Tracing status: {status}", "red")
         connection = 0
 
         if clips is not None:
@@ -1623,18 +1696,6 @@ class ExperimentEnv:
 
         return path, status
 
-    def is_cable_pixel(self, gray, pos, threshold=100, use_erode=True):
-        x, y = pos
-
-        if use_erode:
-            kernel = np.ones((3, 3), np.uint8)
-            gray = cv2.erode(gray, kernel, iterations=1)
-
-        if 0 <= x < gray.shape[1] and 0 <= y < gray.shape[0]:
-            return gray[y, x] > threshold
-        else:
-            return False
-
     def get_nearest_analytic_grasp_point(self, start_point, img=None, visualize=False):
         """
         Finds the nearest grasp point on the cable to a given position (start_point) using the analytic
@@ -1672,7 +1733,7 @@ class ExperimentEnv:
             #     x = pos[0]
             #     y = pos[1]
             #     break
-            if self.is_cable_pixel(gray_img, pos):
+            if is_cable_pixel(gray_img, pos):
                 x = pos[0]
                 y = pos[1]
                 break

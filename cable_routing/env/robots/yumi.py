@@ -4,9 +4,11 @@ from yumi_jacobi import yumi
 from yumi_jacobi.interface import Interface
 from autolab_core import RigidTransform
 from cable_routing.configs.envconfig import ExperimentConfig
+from jacobi import PlanningError
 from typing import Literal, Optional, List, Tuple, Union
 import tyro
 import time
+from termcolor import colored, cprint
 
 
 class YuMiRobotEnv:
@@ -46,10 +48,10 @@ class YuMiRobotEnv:
         )
 
         if arm == "both":
-            if lz < 0.1 or rz < 0.1:
+            if lz < 0.05 or rz < 0.05:
                 self.go_delta(
-                    left_delta=(0, 0, 0.2 if lz < 0.1 else 0),
-                    right_delta=(0, 0, 0.2 if rz < 0.1 else 0),
+                    left_delta=(0, 0, 0.15 if lz < 0.05 else 0),
+                    right_delta=(0, 0, 0.15 if rz < 0.05 else 0),
                 )
             self.set_joint_positions(
                 left_positions=self.robot_config.LEFT_HOME_POS,
@@ -57,16 +59,16 @@ class YuMiRobotEnv:
             )
 
         elif arm == "left":
-            if lz < 0.1:
-                self.go_delta(left_delta=(0, 0, 0.2), right_delta=(0, 0, 0))
+            if lz < 0.05:
+                self.go_delta(left_delta=(0, 0, 0.15), right_delta=(0, 0, 0))
             self.set_joint_positions(
                 left_positions=self.robot_config.LEFT_HOME_POS,
                 right_positions=None,
             )
 
         elif arm == "right":
-            if rz < 0.1:
-                self.go_delta(left_delta=(0, 0, 0), right_delta=(0, 0, 0.2))
+            if rz < 0.05:
+                self.go_delta(left_delta=(0, 0, 0), right_delta=(0, 0, 0.15))
             self.set_joint_positions(
                 left_positions=None,
                 right_positions=self.robot_config.RIGHT_HOME_POS,
@@ -197,6 +199,11 @@ class YuMiRobotEnv:
             r_targets=r_targets,
         )
 
+        # Skip execution if planning failed
+        if isinstance(trajectories, PlanningError):
+            print("[Warning] Planning failed. Skipping execution.")
+            return
+
         if arm == "right" or arm == "left":
             if l_targets or r_targets:
                 self.interface.run_trajectory(
@@ -204,7 +211,6 @@ class YuMiRobotEnv:
                     r_trajectory=trajectories[1] if r_targets else None,
                 )
         else:  # "both"
-            assert print("useless")
             self.interface.run_trajectories(trajectories)
 
     def set_joint_positions(
@@ -373,7 +379,7 @@ class YuMiRobotEnv:
 
         self.grippers_move_to(arm, distance=10)
 
-        print(f"Moving {arm} arm to the target position.")
+        cprint(f"Moving {arm} arm to the target position.", "blue")
         # Move above the target
         rot = RigidTransform.x_axis_rotation(-np.pi) @ RigidTransform.z_axis_rotation(
             -eef_rot
@@ -401,7 +407,7 @@ class YuMiRobotEnv:
         self.close_grippers(side=arm, wait=True)
         self.set_speed("normal")
 
-        print(f"{arm.capitalize()} arm grasp completed.")
+        cprint(f"{arm.capitalize()} arm grasp completed.", "blue")
 
     def set_speed(self, speed: Literal["slow", "normal"]):
 
@@ -475,7 +481,7 @@ class YuMiRobotEnv:
         if right_world_coord is not None and left_world_coord is not None:
             self.grippers_move_to(grasp_arm, distance=10)
 
-        print("Moving both arms to target positions.")
+        cprint("Moving both arms to target positions.", "blue")
 
         if left_eef_rot is not None:
 
@@ -524,7 +530,7 @@ class YuMiRobotEnv:
 
         self.set_speed("normal")
 
-        print("Dual-hand grasp completed.")
+        cprint("Dual-hand grasp completed.", "blue")
 
     def move_dual_hand_to(
         self,
