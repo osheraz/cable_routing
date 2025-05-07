@@ -11,10 +11,10 @@ def main(args: ExperimentConfig):
     env = ExperimentEnv(args)
     env.robot.open_grippers()
 
-    routing = ["A", "B", "C", "E", "F"]
+    routing = ["A", "C", "D","F"]
 
     env.route_cable(
-        routing, display=False, dual_arm=True, primary_arm="right", save_viz=False
+        routing, display=True, dual_arm=True, primary_arm="right", save_viz=False
     )
 
     exit()
