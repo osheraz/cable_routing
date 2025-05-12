@@ -14,7 +14,7 @@ This directory contains the core components for robotic cable routing, including
 
 ## Installation
 
-To set up the environment, install dependencies, and build required components, please refer to the [INSTALL.md](../INSTALL.md) guide.
+To set up the environment, install dependencies, and build required components, please refer to the [INSTALL.md](/INSTALL.md) guide.
 
 ---
 
