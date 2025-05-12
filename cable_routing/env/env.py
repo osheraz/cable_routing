@@ -725,40 +725,6 @@ class ExperimentEnv:
                 # skip "up"
                 break
 
-        # old logic for regrasping
-        # if switch_hands:
-        # print("Swapping Arms")
-        # arm = self.swap_arms(arm)
-
-        # expected_rotation = (
-        #     self.robot.get_gripper_rotation(arm) + 180 * rotation_dir
-        # )
-
-        # if expected_rotation < self.robot.rotation_limits[arm][0]:
-        #     print("REGRASPING")
-        #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
-        #     print(f"{expected_rotation=}")
-        #     print("Rotating with direction = 1 (positive rotation)")
-        #     self.regrasp(arm, direction=1)
-        #     has_regrasped = 1
-        #     print(f"{has_regrasped=}")
-        #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
-
-        #     print()
-        # elif expected_rotation > self.robot.rotation_limits[arm][1]:
-        #     print("REGRASPING")
-        #     print("Previous eef rotation", self.robot.get_gripper_rotation(arm))
-        #     print(f"{expected_rotation=}")
-        #     print("Rotating with direction = -1 (positive rotation)")
-        #     self.regrasp(arm, direction=-1)
-        #     has_regrasped = -1
-        #     print(f"{has_regrasped=}")
-        #     print("New eef rotation", self.robot.get_gripper_rotation(arm))
-        # else:
-        #     print("NOT REGRASPING")
-        #     print("Current eef rotation", self.robot.get_gripper_rotation(arm))
-        #     print(f"{expected_rotation=}")
-
         return sequence, arm
 
     def slideto_cable_node(
@@ -1213,26 +1179,6 @@ class ExperimentEnv:
             plt.title("Cable Path with Orientations")
             plt.show()
 
-        # Move secondary arm to start position (2-step motion)
-        # poses_secondary_align = [
-        #     RigidTransform(
-        #         translation=second_pose.translation, rotation=second_pose.rotation
-        #     ),
-        #     RigidTransform(
-        #         translation=second_pose.translation,
-        #         rotation=RigidTransform.x_axis_rotation(-np.pi)
-        #         @ RigidTransform.z_axis_rotation(-eef_second[0]),
-        #     ),
-        # ]
-
-        # result = run_with_timeout(
-        #     self.robot.plan_and_execute_linear_waypoints,
-        #     4,
-        #     s_arm,
-        #     waypoints=poses_secondary_align,
-        # )
-
-        # Move secondary arm to start position (2-step motion)
         poses_secondary = [
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
@@ -1271,10 +1217,6 @@ class ExperimentEnv:
             )
             for wp, ori in zip(waypoints_secondary, eef_second)
         ]
-        # poses_secondary = [
-        #     RigidTransform(translation=wp, rotation=second_pose.rotation)
-        #     for wp in waypoints_secondary
-        # ]
 
         result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints,

@@ -9,7 +9,7 @@ from typing import Literal, Optional, List, Tuple, Union
 import tyro
 import time
 from termcolor import colored, cprint
-import logging, re, io
+import logging, re, io, threading
 
 import sys
  
@@ -17,7 +17,7 @@ class YuMiRobotEnv:
     def __init__(self, robot_config, speed=0.15, gripper_opening=4):
         # self._install_stderr_hook()
         print("[YUMI_JACOBI] Initializing YuMi...")
-
+        self.reset_triggered = False
         self.robot_config = robot_config
         self.speed = speed
         self._init_interface()
@@ -28,30 +28,34 @@ class YuMiRobotEnv:
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
-
-        # max rotation limits wrt to the home position
-        # initial_left_rot = self.robot_config.LEFT_HOME_POS[-1] * 180 / np.pi
-        # initial_right_rot = self.robot_config.RIGHT_HOME_POS[-1] * 180 / np.pi
-
-        # self.rotation_limits = {
-        #     "right": (-90 + initial_right_rot, 270 + initial_right_rot),
-        #     "left": (-270 + initial_left_rot, 90 + initial_left_rot),
-        # }
-
-        # self.close_grippers()
         
+        self.reset_triggered = False
+        self._reset_event = threading.Event() 
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
-    def _init_interface(self):
-        self.interface = Interface(speed=self.speed, on_reset=self._on_interface_reset)
+    @property
+    def interface_failed(self):
+        return self.reset_triggered
 
-    def _on_interface_reset(self):
+    def _init_interface(self):
+        self.interface = Interface(speed=self.speed, on_fail=self._on_interface_fail)
+
+    def _on_interface_fail(self):
+        print("[YuMiRobotEnv] Failure detected.")
+        self.reset_triggered = True
+        self._reset_event.clear()
+        print("[YuMiRobotEnv] Waiting for external reset...")
+        self._reset_event.wait() 
+        
+    def _on_interface_reset_request(self):
         print("[YuMiRobotEnv] Resetting interface...")
         del self.interface
         time.sleep(0.3)
         self._init_interface()
         time.sleep(1.0)
 
+        self.reset_triggered = False
+        self._reset_event.set()  # <- UNBLOCK _on_interface_fail
         print("[YuMiRobotEnv] Interface reset complete.")
         
     def move_to_home(self, arm: Literal["both", "left", "right"] = "both") -> None:
