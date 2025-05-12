@@ -44,14 +44,21 @@ import traceback
 import numpy as np
 import matplotlib.pyplot as plt
 from termcolor import colored, cprint
+import sys
 
 
-def run_with_timeout(func, timeout=2, *args, **kwargs):
-    timeout = 10
+def run_with_timeout(func, timeout=2, *args, checks=True, **kwargs):
+    timeout = 15
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(func, *args, **kwargs)
         try:
-            return future.result(timeout=timeout)
+            result = future.result(timeout=timeout)
+            if checks and result is True:
+                cprint(f"[Fail] Function `{func.__name__}` returned True", "red")
+                cprint(f"Arguments: {args}", "red")
+                cprint(f"Keyword arguments: {kwargs}", "red")
+                exit()
+            return result
         except FuturesTimeout:
             cprint(
                 f"[Timeout] Function `{func.__name__}` timed out after {timeout} seconds.",
@@ -60,6 +67,7 @@ def run_with_timeout(func, timeout=2, *args, **kwargs):
         except Exception as e:
             cprint(f"[Error] Function `{func.__name__}` raised: {e}", "yellow")
             traceback.print_exc()
+    return None
 
 
 def need_regrasp(curr_clip, next_clip, prev_clip, arm):
@@ -134,6 +142,7 @@ class ExperimentEnv:
         rospy.logwarn("Setting up the environment")
         self.exp_config = exp_config
         self.robot = YuMiRobotEnv(exp_config.robot_cfg)
+        
         rospy.sleep(2.0)
 
         self.zed_cam = ZedCameraSubscriber()
@@ -706,7 +715,7 @@ class ExperimentEnv:
 
             swap_arms = s == "left" or s == "right"
             swap_arms &= need_regrasp(curr_clip, next_clip, prev_clip, arm)
-            swap_arms &= progress < 0.5
+            swap_arms &= progress < 0.9
 
             if swap_arms:
                 arm = self.swap_arms(
@@ -1107,7 +1116,18 @@ class ExperimentEnv:
                 if y_min <= secondary_wp[1] <= y_max
                 else last_valid_wp[1]
             )
-            secondary_wp[2] = self.exp_config.grasp_cfg.z_slide  # Keep Z constant
+
+            # adjust z
+            cur_x = current_pose.translation[0]
+            min_x, max_x = 0.33, 0.0
+            z_min = 0.02  # target min Z
+
+            clamped_x = max(min_x, min(cur_x, max_x))
+            scale = (clamped_x - min_x) / (max_x - min_x)
+
+            z_max = self.exp_config.grasp_cfg.z_slide
+            secondary_wp[2] = z_max * (1 - scale) + z_min * scale
+            ###############################
 
             # Enforce offset constraints to avoid collision between arms
             if arm == "right" and secondary_wp[1] < waypoints[i][1] + y_threshold:
@@ -1194,17 +1214,37 @@ class ExperimentEnv:
             plt.show()
 
         # Move secondary arm to start position (2-step motion)
+        # poses_secondary_align = [
+        #     RigidTransform(
+        #         translation=second_pose.translation, rotation=second_pose.rotation
+        #     ),
+        #     RigidTransform(
+        #         translation=second_pose.translation,
+        #         rotation=RigidTransform.x_axis_rotation(-np.pi)
+        #         @ RigidTransform.z_axis_rotation(-eef_second[0]),
+        #     ),
+        # ]
+
+        # result = run_with_timeout(
+        #     self.robot.plan_and_execute_linear_waypoints,
+        #     4,
+        #     s_arm,
+        #     waypoints=poses_secondary_align,
+        # )
+
+        # Move secondary arm to start position (2-step motion)
         poses_secondary = [
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
         ]
-        run_with_timeout(
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints,
             4,
             s_arm,
             waypoints=poses_secondary,
         )
-
+        
+            
         poses_secondary_align = [
             RigidTransform(
                 translation=waypoints_secondary[0], rotation=second_pose.rotation
@@ -1215,7 +1255,7 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-eef_second[0]),
             ),
         ]
-        run_with_timeout(
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints,
             4,
             s_arm,
@@ -1236,7 +1276,7 @@ class ExperimentEnv:
         #     for wp in waypoints_secondary
         # ]
 
-        run_with_timeout(
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints,
             4,
             s_arm,
@@ -1248,9 +1288,10 @@ class ExperimentEnv:
             RigidTransform(translation=waypoint, rotation=current_pose.rotation)
             for waypoint in [current_pose.translation, waypoints[0]]
         ]
-        run_with_timeout(
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints, 4, arm, waypoints=poses
         )
+
         self.robot.set_speed("normal")
 
         # Align primary arm orientation to start of motion
@@ -1262,9 +1303,10 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
-        run_with_timeout(
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints, 4, arm, waypoints=poses
         )
+
         # Prepare full motion paths for both arms
         poses = [
             RigidTransform(
@@ -1282,36 +1324,37 @@ class ExperimentEnv:
         # Interleaved execution of both arms along the path (3-waypoint sliding windows)
         for i in range(len(poses) - 2):
 
-            run_with_timeout(
+            result = run_with_timeout(
                 self.robot.plan_and_execute_linear_waypoints,
                 4,
                 arm,
                 waypoints=poses[i : i + 3],
             )
+
             if not i + 4 > len(poses_secondary):
-                run_with_timeout(
+                result = run_with_timeout(
                     self.robot.plan_and_execute_linear_waypoints,
                     4,
                     s_arm,
                     waypoints=poses_secondary[i + 1 : i + 4],
                 )
+
         # Final alignment of both arms at the end
 
-        # run_with_timeout(
-        #     self.robot.set_ee_pose,
-        #     4,
-        #     left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
-        #     right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
-        # )
-
         run_with_timeout(
+            self.robot.set_ee_pose,
+            4,
+            left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
+            right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
+        )
+
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints,
             4,
             s_arm,
             waypoints=[poses_secondary[-1], poses_secondary[-1]],
         )
-
-        run_with_timeout(
+        result = run_with_timeout(
             self.robot.plan_and_execute_linear_waypoints,
             4,
             arm,
@@ -1337,9 +1380,9 @@ class ExperimentEnv:
         second_pose = eefs_pose[1 if arm == "left" else 0]
         init_arm_pose = current_pose.copy()
 
-        # release the second arm - maybe move the safe position.
-
+        # release the second arm
         new_second_pose = second_pose.copy()
+        new_second_pose.translation[0] = current_pose.translation[0]
         new_second_pose.translation[2] = 0.01
         s_arm = "left" if arm == "right" else "right"
         poses_dict = {arm: None, s_arm: new_second_pose}
@@ -1349,19 +1392,18 @@ class ExperimentEnv:
         # slide the first arm to safe position
         # TODO: actually it has to be with the routing directions
         align_pose = current_pose.copy()
-        align_pose.translation[2] = 0.0
+        align_pose.translation[2] = 0.01
 
-        if curr_y > next_y:
-            align_pose.translation[0] = min(
-                current_pose.translation[0] + 0.25, self.exp_config.grasp_cfg.x_max
-            )
-        else:
-            align_pose.translation[0] = max(
-                current_pose.translation[0] - 0.25, self.exp_config.grasp_cfg.x_min
-            )
+        # if curr_y > next_y:
+        align_pose.translation[0] = min(
+            current_pose.translation[0] + 0.22, self.exp_config.grasp_cfg.x_max
+        )
+        # else:
+        #     align_pose.translation[0] = max(
+        #         current_pose.translation[0] - 0.25, self.exp_config.grasp_cfg.x_min
+        #     )
         poses_dict = {arm: align_pose, s_arm: None}
         self.robot.set_ee_pose(poses_dict["left"], poses_dict["right"])
-
         # now the y value.
         # eefs_pose = self.robot.get_ee_pose()
         # second_pose = eefs_pose[1 if arm == "left" else 0]

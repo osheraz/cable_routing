@@ -9,19 +9,22 @@ from typing import Literal, Optional, List, Tuple, Union
 import tyro
 import time
 from termcolor import colored, cprint
+import logging, re, io
 
-
+import sys
+ 
 class YuMiRobotEnv:
     def __init__(self, robot_config, speed=0.15, gripper_opening=4):
+        # self._install_stderr_hook()
         print("[YUMI_JACOBI] Initializing YuMi...")
 
         self.robot_config = robot_config
         self.speed = speed
-        self.interface = Interface(speed=speed)
+        self._init_interface()
+        
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.gripper_opening = gripper_opening
-
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
@@ -36,8 +39,21 @@ class YuMiRobotEnv:
         # }
 
         # self.close_grippers()
+        
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
+    def _init_interface(self):
+        self.interface = Interface(speed=self.speed, on_reset=self._on_interface_reset)
+
+    def _on_interface_reset(self):
+        print("[YuMiRobotEnv] Resetting interface...")
+        del self.interface
+        time.sleep(0.3)
+        self._init_interface()
+        time.sleep(1.0)
+
+        print("[YuMiRobotEnv] Interface reset complete.")
+        
     def move_to_home(self, arm: Literal["both", "left", "right"] = "both") -> None:
         """Moves the specified arm to the home position. Default is both."""
         self.set_speed("normal")
@@ -198,18 +214,20 @@ class YuMiRobotEnv:
             l_targets=l_targets,
             r_targets=r_targets,
         )
-
         # Skip execution if planning failed
         if isinstance(trajectories, PlanningError):
-            print("[Warning] Planning failed. Skipping execution.")
-            return
+            cprint("[Warning] Planning failed. Skipping execution.", 'red')
+            return isinstance(trajectories, PlanningError)
 
         if arm == "right" or arm == "left":
             if l_targets or r_targets:
-                self.interface.run_trajectory(
+
+                results = self.interface.run_trajectory(
                     l_trajectory=trajectories[0] if l_targets else None,
                     r_trajectory=trajectories[1] if r_targets else None,
                 )
+
+
         else:  # "both"
             self.interface.run_trajectories(trajectories)
 

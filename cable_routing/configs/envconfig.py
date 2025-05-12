@@ -119,7 +119,7 @@ class GraspConfig:
 
     z_slide: float = 0.1
     y_threshold: float = 0.1
-    offset_vector: Tuple[float, ...] = (0.1, 0.1, 0.1)
+    offset_vector: Tuple[float, ...] = (0.12, 0.12, 0.05)
 
 
 @dataclasses.dataclass
