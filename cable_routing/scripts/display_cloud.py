@@ -35,7 +35,7 @@ def main():
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsic)
 
     T_CAM_BASE = RigidTransform.load(
-        "/home/osheraz/cable_routing/data/zed/zed_to_world.tf"
+        "/home/osherexp/cable_routing/data/zed/zed_to_world.tf"
     ).as_frames(from_frame="zed", to_frame="base_link")
 
     ext_mat = T_CAM_BASE.matrix

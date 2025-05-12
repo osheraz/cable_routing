@@ -1048,8 +1048,8 @@ class ExperimentEnv:
 
         # Get current end-effector poses for both arms
         eefs_pose = self.robot.get_ee_pose()
-        current_pose = eefs_pose[0 if arm == "left" else 1]
-        second_pose = eefs_pose[1 if arm == "left" else 0]
+        current_pose = eefs_pose[0 if arm == "left" else 1] # sliding hand
+        second_pose = eefs_pose[1 if arm == "left" else 0]  # supporting hand
 
         # Bounds and thresholds for secondary arm path generation
         x_min, x_max = self.exp_config.grasp_cfg.x_min, self.exp_config.grasp_cfg.x_max
@@ -1179,6 +1179,11 @@ class ExperimentEnv:
             plt.title("Cable Path with Orientations")
             plt.show()
 
+        ##########################
+        # Executing the motion 
+        ##########################
+        
+        # translation
         poses_secondary = [
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
@@ -1190,7 +1195,7 @@ class ExperimentEnv:
             waypoints=poses_secondary,
         )
         
-            
+        # orientation
         poses_secondary_align = [
             RigidTransform(
                 translation=waypoints_secondary[0], rotation=second_pose.rotation
@@ -1290,18 +1295,18 @@ class ExperimentEnv:
             right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
         )
 
-        result = run_with_timeout(
-            self.robot.plan_and_execute_linear_waypoints,
-            4,
-            s_arm,
-            waypoints=[poses_secondary[-1], poses_secondary[-1]],
-        )
-        result = run_with_timeout(
-            self.robot.plan_and_execute_linear_waypoints,
-            4,
-            arm,
-            waypoints=[poses[-1], poses[-1]],
-        )
+        # result = run_with_timeout(
+        #     self.robot.plan_and_execute_linear_waypoints,
+        #     4,
+        #     s_arm,
+        #     waypoints=[poses_secondary[-1], poses_secondary[-1]],
+        # )
+        # result = run_with_timeout(
+        #     self.robot.plan_and_execute_linear_waypoints,
+        #     4,
+        #     arm,
+        #     waypoints=[poses[-1], poses[-1]],
+        # )
 
     def swap_arms(self, arm, prev_clip, curr_clip, next_clip, fixture_dir):
         """
