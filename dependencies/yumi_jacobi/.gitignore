@@ -1,0 +1,12 @@
+# /test/*
+# /Jacobi_EGM_SmartGrippers_Modules
+# /starter_examples
+# /starter_examples/AUTOLAB_BWW_YuMi.jacobi-project
+yumi_jacobi.egg-info
+/starter_examples/AUTOLAB_BWW_YuMi.jacobi-project
+/starter_examples/_yumi.py
+/starter_examples/autolab_yumi_studio_starter.py
+/starter_examples/print_current_config.py
+/starter_examples/test_sequential_planning.py
+/starter_examples/test_sequential_planning2.py
+/test/

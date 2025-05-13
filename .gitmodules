@@ -28,9 +28,6 @@
 [submodule "catkin_ws/src/rospy_message_converter"]
 	path = catkin_ws/src/rospy_message_converter
 	url = https://github.com/DFKI-NI/rospy_message_converter.git
-[submodule "catkin_ws/src/zed-ros-wrapper"]
-	path = catkin_ws/src/zed-ros-wrapper
-	url = https://github.com/stereolabs/zed-ros-wrapper.git
 [submodule "catkin_ws/src/zion_msgs"]
 	path = catkin_ws/src/zion_msgs
 	url = https://github.com/nimiCurtis/zion_msgs.git
