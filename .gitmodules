@@ -28,9 +28,6 @@
 [submodule "catkin_ws/src/rospy_message_converter"]
 	path = catkin_ws/src/rospy_message_converter
 	url = https://github.com/DFKI-NI/rospy_message_converter.git
-[submodule "dependencies/yumi_jacobi"]
-	path = dependencies/yumi_jacobi
-	url = https://github.com/uynitsuj/yumi_jacobi.git
 [submodule "catkin_ws/src/zed-ros-wrapper"]
 	path = catkin_ws/src/zed-ros-wrapper
 	url = https://github.com/stereolabs/zed-ros-wrapper.git
