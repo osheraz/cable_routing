@@ -1,4 +1,7 @@
 # Installation
+
+(From Justin's repo)
+
 Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
 
 ```
@@ -57,47 +60,16 @@ roscore
 ```
 Should start a roscore instance
 
-## Install Zed drivers & Jacobi & HANDLOOM
-```bash
-todo
-```
+## Install ZED Drivers, Jacobi, and HANDLOOM
 
-## Install ABB Robot Driver and dependencies
+Follow the setup instructions for each component:
 
-### Building the Packages
-
-```bash
-# Change to the root of the Catkin workspace.
-cd ~/cable_routing/catkin_ws/src
-
-git clone https://github.com/ros-industrial/abb_robot_driver_interfaces.git
-
-mamba install protobuf ros-noetic-controller-manager ros-noetic-joint-state-controller ros-noetic-velocity-controllers ros-noetic-position-controllers ros-noetic-controller-manager-msgs ros-noetic-hardware-interface ros-noetic-joint-limits-interface ros-noetic-controller-interface ros-noetic-realtime-tools
-
-# Finally build the workspace (may take a minute)
-cd ~/cable_routing/catkin_ws
-catkin build
-```
-Clean install should result in no error messages
-
-Finally, activate the workspace to get access to the packages just built:
-```bash
-source ~/cable_routing/catkin_ws/devel/setup.bash
-```
-
-## Test YuMi launch
-```bash
-roslaunch abb_robot_bringup yumi_robot.launch
-```
-
-### Install Issues
-If linking issues with libabb_libegm.so or libprotobuf.so occur try adding to the launch file with something like...
-```bash
-<?xml version="1.0"?>
-<launch>
-
-  # export paths to shared libraries in 
-  <env name="LD_LIBRARY_PATH" value="/home/<user>/catkin_ws/devel/abb_libegm/lib:/home/<user>/miniforge3/envs/yumiegmros/lib:${LD_LIBRARY_PATH}" />
-  <arg name="robot_ip" doc="The robot controller's IP address"/>
-```
-
+- 📦 **Jacobi**: Refer to the `README.md` inside the `yumi_jacobi` directory.
+- 🧶 **HANDLOOM**: Refer to the `README.md` inside the `handloom` directory.
+- 🎥 **ZED Drivers**: Clone the ZED ROS wrapper and compile it in your `catkin_ws`.
+  ```bash
+  cd ~/catkin_ws/src
+  git clone https://github.com/stereolabs/zed-ros-wrapper.git
+  cd ..
+  catkin_make
+  ```

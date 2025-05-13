@@ -1,6 +1,8 @@
 from math import e
 from re import S
 import rospy
+from std_srvs.srv import Trigger, TriggerResponse
+
 import cv2
 from sympy import im
 from tqdm import tqdm
@@ -9,8 +11,10 @@ import tyro
 import matplotlib.pyplot as plt
 import numpy as np
 import datetime
+import time
 import os
 import random
+import threading
 import heapq
 from autolab_core import RigidTransform, Point, CameraIntrinsics
 from cable_routing.configs.envconfig import ExperimentConfig
@@ -142,7 +146,7 @@ class ExperimentEnv:
         rospy.logwarn("Setting up the environment")
         self.exp_config = exp_config
         self.robot = YuMiRobotEnv(exp_config.robot_cfg)
-        
+
         rospy.sleep(2.0)
 
         self.zed_cam = ZedCameraSubscriber()
@@ -172,7 +176,34 @@ class ExperimentEnv:
         self.cable_in_arm = None
         self.swapped = False
         self.workspace_img = self.zed_cam.get_rgb().copy()
+        self._start_manual_reset_service()  # <-- Add this line
 
+        # self._start_reset_listener()
+    def _start_manual_reset_service(self):
+        rospy.Service("/manual_reset_yumi", Trigger, self._handle_manual_reset)
+
+    def _handle_manual_reset(self, req):
+        rospy.logwarn("[ManualReset] Manual reset requested via ROS service.")
+        try:
+            self.robot._on_interface_reset_request()
+            return TriggerResponse(success=True, message="Reset completed successfully.")
+        except Exception as e:
+            rospy.logerr(f"[ManualReset] Reset failed: {e}")
+            return TriggerResponse(success=False, message=str(e))
+        
+    def _start_reset_listener(self):
+        def monitor():
+            last_state = None
+            while True:
+                current_state = self.robot.reset_triggered
+                if current_state != last_state:
+                    print(f"[Listener] reset_triggered changed: {current_state}")
+                    last_state = current_state
+                time.sleep(0.05)
+        
+        thread = threading.Thread(target=monitor, daemon=True)
+        thread.start()
+    
     def adjust_extrinsic(self, arm, roll=0.0, pitch=0.0, yaw=0.0):
 
         rotation_tilt = get_rotation_matrix(roll, pitch, yaw)
@@ -582,7 +613,6 @@ class ExperimentEnv:
             right_eef_rot=eef_rots["right"],
             grasp_arm=grasp_arm,
         )
-
         self.cable_in_arm = grasp_arm
 
         return move_to_pixel_grasp, world_coord_grasp, idx
@@ -610,7 +640,7 @@ class ExperimentEnv:
         secondary_arm = "left" if primary_arm == "right" else "right"
         initial_grasp_idx = -1
 
-        # grasp the cable with 1/2 hands
+        # grasp the cable with 1 or 2 hands
         if not dual_arm:
             primary_pixel_coord, primary_world_coord, main_initial_grasp_idx = (
                 self.grasp_cable_node(
@@ -651,7 +681,7 @@ class ExperimentEnv:
 
             progress = self.update_routing_progress_px(routing, i)
 
-        # closing ceremony - finally just go to a pose above the final clip (x, y)
+        # Closing ceremony - go to a pose above the final clip (x, y)
         secondary_arm = "left" if primary_arm == "right" else "right"
         z_offset = self.exp_config.grasp_cfg.z_offset
         self.robot.open_grippers(secondary_arm)
@@ -1538,7 +1568,7 @@ class ExperimentEnv:
             os.makedirs(save_folder, exist_ok=True)
         else:
             save_folder = None
-        p1, p2 = self.board.point1, self.board.point2
+        p1, p2 = self.board.point1, self.board.point2       #(582, 5), (1391, 767)
 
         clips = list(self.board.get_clips().values())
         for clip in clips:

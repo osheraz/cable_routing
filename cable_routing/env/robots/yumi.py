@@ -33,21 +33,54 @@ class YuMiRobotEnv:
         self._reset_event = threading.Event() 
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
+        self._interface_lock = threading.Lock()
+    
     @property
     def interface_failed(self):
         return self.reset_triggered
 
     def _init_interface(self):
         self.interface = Interface(speed=self.speed, on_fail=self._on_interface_fail)
+        
+    # def _on_interface_fail(self):
+    #     print("[YuMiRobotEnv] Failure detected.")
+    #     self.reset_triggered = True
+
+    #     self._reset_event.clear()  # Ensure we block
+    #     print("[YuMiRobotEnv] Waiting for external reset...")
+    #     self._reset_event.wait()  # Block until reset
+    #     print("[YuMiRobotEnv] Unblocked after reset.")
+
+        
+    # def _on_interface_reset_request(self):
+    #     with self._interface_lock:
+    #         print("[YuMiRobotEnv] Resetting interface...")
+    #         del self.interface
+    #         time.sleep(1.0)
+    #         self._init_interface()
+    #         time.sleep(1.0)
+
+    #         for i in range(20):
+    #             if self.interface.is_ready():
+    #                 break
+    #             print(f"[YuMiRobotEnv] Waiting for EGM... ({i+1}/20)")
+    #             time.sleep(0.5)
+    #         else:
+    #             print("[YuMiRobotEnv] ERROR: EGM not ready.")
+    #             raise RuntimeError("EGM not reconnected after reset")
+
+    #         self.reset_triggered = False
+    #         self._reset_event.set()  # <- Unblocks waiting thread
+    #         print("[YuMiRobotEnv] Interface reset complete.")
 
     def _on_interface_fail(self):
         print("[YuMiRobotEnv] Failure detected.")
         self.reset_triggered = True
-        self._reset_event.clear()
-        print("[YuMiRobotEnv] Waiting for external reset...")
-        self._reset_event.wait() 
+    #     self._reset_event.clear()
+    #     print("[YuMiRobotEnv] Waiting for external reset...")
+    #     self._reset_event.wait() 
         
-    def _on_interface_reset_request(self):
+    # def _on_interface_reset_request(self):
         print("[YuMiRobotEnv] Resetting interface...")
         del self.interface
         time.sleep(0.3)
@@ -57,7 +90,7 @@ class YuMiRobotEnv:
         self.reset_triggered = False
         self._reset_event.set()  # <- UNBLOCK _on_interface_fail
         print("[YuMiRobotEnv] Interface reset complete.")
-        
+
     def move_to_home(self, arm: Literal["both", "left", "right"] = "both") -> None:
         """Moves the specified arm to the home position. Default is both."""
         self.set_speed("normal")
@@ -249,6 +282,7 @@ class YuMiRobotEnv:
         right_pose: Optional[RigidTransform] = None,
     ) -> None:
         """Moves arms linearly to a specific end-effector pose."""
+
         self.interface.go_linear_single(l_target=left_pose, r_target=right_pose)
 
     def go_delta(
@@ -531,7 +565,7 @@ class YuMiRobotEnv:
             left_target_pose.translation[2] += 0.1
         if right_target_pose:
             right_target_pose.translation[2] += 0.1
-
+    
         self.set_ee_pose(left_pose=left_target_pose, right_pose=right_target_pose)
 
         for _ in range(2):
@@ -554,6 +588,7 @@ class YuMiRobotEnv:
 
         cprint("Dual-hand grasp completed.", "blue")
 
+        
     def move_dual_hand_to(
         self,
         target_center: np.ndarray,
