@@ -23,13 +23,13 @@ To set up the environment, install dependencies, and build required components, 
 ### 🔧 Step 1: Launch the Robot and Camera Display
 
 1. Turn on the YuMi robot and power supply.
-2. Open Terminal 1:
+2. Open Terminal 1: Launch the camera node
    ```bash
    mamba activate cable
    yumi  # source the ROS workspace
    roslaunch zed_wrapper zedm.launch
    ```
-3. Open Terminal 2:
+3. Open Terminal 2: Open visualization
    ```bash
    mamba activate cable
    yumi  # source the ROS workspace

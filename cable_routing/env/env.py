@@ -136,6 +136,13 @@ def calculate_sequence(curr_clip, prev_clip, next_clip):
     return sequence, -1 if is_clockwise else 1
 
 
+# TODO: This class should split into multiple classes, one for each module
+# Splitting the code into smaller classes will make it easier to maintain and understand.
+# It will also help in unit testing and debugging.
+# The ExperimentEnv class is responsible for setting up the environment
+# managing the robot, camera, and board, and handling the routing of cables.
+
+
 class ExperimentEnv:
 
     def __init__(
@@ -154,7 +161,7 @@ class ExperimentEnv:
             rospy.sleep(0.1)
             rospy.loginfo("Waiting for images from ZED camera...")
 
-        # camera to base transform
+        # Camera to base transform
         self.T_CAM_BASE = {
             "left": RigidTransform.load(
                 exp_config.cam_to_robot_left_trans_path
@@ -164,9 +171,13 @@ class ExperimentEnv:
             ).as_frames(from_frame="zed", to_frame="base_link"),
         }
 
+        # In case we need to adjust the camera extrinsic manually:
         # self.adjust_extrinsic("right", yaw=-5.0)
 
+        # handloom pipeline wrapper
         self.tracer = CableTracer()
+
+        # slide planner
         self.planner = BoardPlanner(show_animation=False)
 
         self.board = Board(config_path=exp_config.board_cfg_path)
@@ -176,22 +187,37 @@ class ExperimentEnv:
         self.cable_in_arm = None
         self.swapped = False
         self.workspace_img = self.zed_cam.get_rgb().copy()
-        self._start_manual_reset_service()  # <-- Add this line
 
+        # manual reset service with ros
+        self._start_manual_reset_service()
+
+        # in case we need to monitor the reset_triggered variable
         # self._start_reset_listener()
+
+        # in case we want to check the calibration
+        # self.check_calibration("left")
+        # self.check_calibration("right")
+
     def _start_manual_reset_service(self):
+        """Start a ROS service to manually reset the robot."""
         rospy.Service("/manual_reset_yumi", Trigger, self._handle_manual_reset)
 
     def _handle_manual_reset(self, req):
+        """Handle the manual reset request."""
+
         rospy.logwarn("[ManualReset] Manual reset requested via ROS service.")
         try:
             self.robot._on_interface_reset_request()
-            return TriggerResponse(success=True, message="Reset completed successfully.")
+            return TriggerResponse(
+                success=True, message="Reset completed successfully."
+            )
         except Exception as e:
             rospy.logerr(f"[ManualReset] Reset failed: {e}")
             return TriggerResponse(success=False, message=str(e))
-        
+
     def _start_reset_listener(self):
+        """Start a thread to monitor the reset_triggered variable."""
+
         def monitor():
             last_state = None
             while True:
@@ -200,27 +226,28 @@ class ExperimentEnv:
                     print(f"[Listener] reset_triggered changed: {current_state}")
                     last_state = current_state
                 time.sleep(0.05)
-        
+
         thread = threading.Thread(target=monitor, daemon=True)
         thread.start()
-    
-    def adjust_extrinsic(self, arm, roll=0.0, pitch=0.0, yaw=0.0):
 
+    def adjust_extrinsic(self, arm, roll=0.0, pitch=0.0, yaw=0.0):
+        """Adjust the camera extrinsic parameters."""
         rotation_tilt = get_rotation_matrix(roll, pitch, yaw)
         self.T_CAM_BASE[arm].rotation = rotation_tilt @ self.T_CAM_BASE[arm].rotation
 
     def get_extrinsic(self, arm):
-
+        """Get the camera to base transform for the specified arm."""
         return self.T_CAM_BASE[arm]
 
     def set_board_region(self, img=None):
-
+        """Set the region of interest for the board."""
         if img is None:
             img = self.zed_cam.rgb_image
 
         _, self.point1, self.point2 = crop_board(img)
 
     def compute_routing_length_px(self, routing):
+        """Compute the total length of the routing path in pixels."""
 
         clips = self.board.get_clips()
 
@@ -238,10 +265,11 @@ class ExperimentEnv:
         return total_length
 
     def update_routing_progress_px(self, routing, current_idx):
-
+        """Update the routing progress based on the current index."""
+        # Check if the current index is within the valid range
         if current_idx <= 0 or current_idx >= len(routing):
             return
-
+        # Calculate the accumulated length in pixels
         clips = self.board.get_clips()
         a = np.array(
             [clips[routing[current_idx - 1]]["x"], clips[routing[current_idx - 1]]["y"]]
@@ -250,7 +278,7 @@ class ExperimentEnv:
             [clips[routing[current_idx]]["x"], clips[routing[current_idx]]["y"]]
         )
         self.accumulated_length_px += np.linalg.norm(b - a)
-
+        # Calculate the total length of the routing path
         total = self.compute_routing_length_px(routing)
         print(
             f"[Progress] {self.accumulated_length_px:.1f} / {total:.1f} pixels routed"
@@ -259,7 +287,8 @@ class ExperimentEnv:
         return self.accumulated_length_px / total
 
     def check_calibration(self, arm):
-        """we are going to poke all the clips/plugs etc"""
+        """Check if the camera is calibrated correctly."""
+        """We are going to poke all the clips/plugs one by one"""
 
         self.robot.move_to_home()
 
@@ -303,7 +332,9 @@ class ExperimentEnv:
         save_vis=False,
         display=False,
     ):
+        """Update the cable path by tracing it from start to end points using HANDLOOM"""
 
+        # Trace the cable path using start point around "A".
         path_in_pixels, _ = self.trace_cable(
             start_points=start_points,
             end_points=end_points,
@@ -314,8 +345,10 @@ class ExperimentEnv:
 
         self.board.set_cable_path(path_in_pixels)
 
+        # convert the pixel path to world coordinates
         path_in_world = self.convert_path_to_world_coord(path_in_pixels, arm=arm)
 
+        # get the cable orientations (prependicular to the path)
         cable_orientations = [
             get_perpendicular_orientation(
                 path_in_world[idx - 1],
@@ -328,6 +361,7 @@ class ExperimentEnv:
         cable_orientations = np.unwrap(cable_orientations)
         cable_orientations = np.mod(cable_orientations, 2 * np.pi).tolist()
 
+        # Display the cable path and orientations
         if display:
             path_arr = np.array(path_in_world)
 
@@ -363,7 +397,7 @@ class ExperimentEnv:
         return path_in_pixels, path_in_world, cable_orientations
 
     def convert_path_to_world_coord(self, path, arm):
-
+        """Convert the cable path from pixel coordinates to world coordinates."""
         world_path = []
         for pixel_coord in path:
             world_coord = get_world_coord_from_pixel_coord(
@@ -383,29 +417,34 @@ class ExperimentEnv:
         display=False,
         user_pick=False,
     ):
+        """Grasp the cable node at the specified index."""
+
         offset_distance = self.exp_config.grasp_cfg.offset_distance
 
         if idx is None and user_pick:
+            # support for user picking
             frame = self.zed_cam.get_rgb()
             move_to_pixel = pick_target_on_path(frame, path)
             move_to_pixel, idx = find_nearest_point(path, move_to_pixel)
         else:
-
+            # find the nearest clip to trace (around clip A)
             nearest_clip = self.board.get_clips()[start_clip_id]
             nearest_clip = np.array([nearest_clip["x"], nearest_clip["y"]])
             start_trace = np.array(path[0])
             direction = (start_trace - nearest_clip) / np.linalg.norm(
                 start_trace - nearest_clip
             )
+            # find the nearest point on the path
             move_to_pixel, idx = find_nearest_point(
                 path, nearest_clip + direction * offset_distance
             )
 
+        # move pixel to world coordinates
         world_coord = get_world_coord_from_pixel_coord(
             move_to_pixel,
             self.zed_cam.intrinsic,
             self.T_CAM_BASE[arm],
-            # depth_map=self.zed_cam.get_depth(),
+            # depth_map=self.zed_cam.get_depth(), # by passing depth map, we can get the z coord
         )
 
         print("Going to ", world_coord)
@@ -468,13 +507,16 @@ class ExperimentEnv:
         user_pick=False,
         display=False,
     ):
+        """Grasp the cable node with both arms."""
+
         follow_arm = "right" if grasp_arm == "left" else "left"
 
+        # convert the path to world coordinates (for both arms)
         path_in_world_grasp = self.convert_path_to_world_coord(path, arm=grasp_arm)
         path_in_world_follow = self.convert_path_to_world_coord(path, arm=follow_arm)
 
         if idx is None and user_pick:
-
+            # support for user picking
             # grasp arm
             frame = self.zed_cam.get_rgb()
             move_to_pixel_grasp = pick_target_on_path(frame, path)
@@ -484,7 +526,9 @@ class ExperimentEnv:
             move_to_pixel_follow = pick_target_on_path(frame, path)
             move_to_pixel_follow, idx = find_nearest_point(path, move_to_pixel_follow)
         else:
-            # find the nearest clip to trace
+
+            # we need to find 2 grasp points which are far enough apart
+            # and not too close to the clips
 
             offset_distance = self.exp_config.grasp_cfg.offset_distance
             min_distance = self.exp_config.grasp_cfg.min_distance
@@ -510,8 +554,9 @@ class ExperimentEnv:
             next_idx = idx + jump
             move_to_pixel_follow = np.array(path[next_idx])
 
+            # find the next point on the path
             for _ in range(5):
-
+                # check if the next point is far enough from the grasp point
                 if np.linalg.norm(
                     move_to_pixel_follow - move_to_pixel_grasp
                 ) >= min_distance and all(
@@ -523,7 +568,7 @@ class ExperimentEnv:
 
                 if next_idx >= len(path):
                     break
-
+                # find the next point on the path
                 move_to_pixel_follow = np.array(path[next_idx])
             else:
                 print("Failed to find a second arm pose\nPlease pick grasp manually")
@@ -531,6 +576,7 @@ class ExperimentEnv:
                     path, pick_target_on_path(frame, path)
                 )
 
+        # convert the pixel coordinates to world coordinates
         world_coord_grasp = get_world_coord_from_pixel_coord(
             move_to_pixel_grasp,
             self.zed_cam.intrinsic,
@@ -596,6 +642,7 @@ class ExperimentEnv:
             plt.grid(True)
             plt.show()
 
+        # support for both directions
         world_coords = {
             "left": world_coord_follow if follow_arm == "left" else world_coord_grasp,
             "right": world_coord_follow if follow_arm == "right" else world_coord_grasp,
@@ -606,6 +653,7 @@ class ExperimentEnv:
             "right": cable_ori_follow if follow_arm == "right" else cable_ori_grasp,
         }
 
+        # perform the dual hand grasp
         self.robot.dual_hand_grasp(
             left_world_coord=world_coords["left"],
             left_eef_rot=eef_rots["left"],
@@ -625,12 +673,14 @@ class ExperimentEnv:
         dual_arm=True,
         save_viz=False,
     ):
+        """Route the cable around the clips in the specified order."""
 
         # get the pixel position of all the clips
         clips = self.board.get_clips()
         start_clip, end_clip = clips[routing[0]], clips[routing[-1]]
         progress = 0
-        # trace cable
+
+        # get the pixel position of the cable path
         path_in_pixels, path_in_world, cable_orientations = self.update_cable_path(
             save_vis=save_viz,
             display=display,
@@ -640,7 +690,7 @@ class ExperimentEnv:
         secondary_arm = "left" if primary_arm == "right" else "right"
         initial_grasp_idx = -1
 
-        # grasp the cable with 1 or 2 hands
+        # Grasp the cable node at the start clip with 1/2 arms
         if not dual_arm:
             primary_pixel_coord, primary_world_coord, main_initial_grasp_idx = (
                 self.grasp_cable_node(
@@ -652,6 +702,8 @@ class ExperimentEnv:
             )
 
         else:
+
+            # Most of the time, we will be using dual arm grasp
             _, _, secondary_initial_grasp_idx = self.dual_grasp_cable_node(
                 path_in_pixels,
                 cable_orientations,
@@ -678,7 +730,7 @@ class ExperimentEnv:
                 display=display,
                 progress=progress,
             )
-
+            # update the routing progress
             progress = self.update_routing_progress_px(routing, i)
 
         # Closing ceremony - go to a pose above the final clip (x, y)
@@ -1078,7 +1130,7 @@ class ExperimentEnv:
 
         # Get current end-effector poses for both arms
         eefs_pose = self.robot.get_ee_pose()
-        current_pose = eefs_pose[0 if arm == "left" else 1] # sliding hand
+        current_pose = eefs_pose[0 if arm == "left" else 1]  # sliding hand
         second_pose = eefs_pose[1 if arm == "left" else 0]  # supporting hand
 
         # Bounds and thresholds for secondary arm path generation
@@ -1210,9 +1262,9 @@ class ExperimentEnv:
             plt.show()
 
         ##########################
-        # Executing the motion 
+        # Executing the motion
         ##########################
-        
+
         # translation
         poses_secondary = [
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
@@ -1224,7 +1276,7 @@ class ExperimentEnv:
             s_arm,
             waypoints=poses_secondary,
         )
-        
+
         # orientation
         poses_secondary_align = [
             RigidTransform(
@@ -1568,7 +1620,7 @@ class ExperimentEnv:
             os.makedirs(save_folder, exist_ok=True)
         else:
             save_folder = None
-        p1, p2 = self.board.point1, self.board.point2       #(582, 5), (1391, 767)
+        p1, p2 = self.board.point1, self.board.point2  # (582, 5), (1391, 767)
 
         clips = list(self.board.get_clips().values())
         for clip in clips:

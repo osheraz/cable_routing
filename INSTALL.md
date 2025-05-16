@@ -1,8 +1,11 @@
 # Installation
 
+> 💡 **Note:** Currently, we use ROS only for the camera module. This dependency can be easily replaced. However, if you plan to perform real-time control, following all installation steps is necessary.
+
 (From Justin's repo)
 
 Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
+
 
 ```
 cd ~/
@@ -67,6 +70,7 @@ Follow the setup instructions for each component:
 - 📦 **Jacobi**: Refer to the `README.md` inside the `yumi_jacobi` directory.
 - 🧶 **HANDLOOM**: Refer to the `README.md` inside the `handloom` directory.
 - 🎥 **ZED Drivers**: Clone the ZED ROS wrapper and compile it in your `catkin_ws`.
+
   ```bash
   cd ~/catkin_ws/src
   git clone https://github.com/stereolabs/zed-ros-wrapper.git
