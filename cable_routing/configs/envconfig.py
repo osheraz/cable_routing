@@ -111,7 +111,7 @@ class GraspConfig:
     exclusion_radius: int = 50
 
     x_min: float = 0.0
-    x_max: float = 0.6
+    x_max: float = 0.57
     y_min: float = -0.4
     y_max: float = 0.4
     z_min: float = 0.0
@@ -119,7 +119,7 @@ class GraspConfig:
 
     z_slide: float = 0.1
     y_threshold: float = 0.1
-    offset_vector: Tuple[float, ...] = (0.12, 0.12, 0.05)
+    offset_vector: Tuple[float, ...] = (0.12, 0.03, 0.05)
 
 
 @dataclasses.dataclass

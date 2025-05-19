@@ -12,7 +12,8 @@ from termcolor import colored, cprint
 import logging, re, io, threading
 
 import sys
- 
+
+
 class YuMiRobotEnv:
     def __init__(self, robot_config, speed=0.15, gripper_opening=4):
         # self._install_stderr_hook()
@@ -21,27 +22,27 @@ class YuMiRobotEnv:
         self.robot_config = robot_config
         self.speed = speed
         self._init_interface()
-        
+
         self.interface.yumi.left.min_position = robot_config.YUMI_MIN_POS
         self.interface.yumi.right.min_position = robot_config.YUMI_MIN_POS
         self.gripper_opening = gripper_opening
         self.open_grippers()
         self.move_to_home()
         self.interface.calibrate_grippers()
-        
+
         self.reset_triggered = False
-        self._reset_event = threading.Event() 
+        self._reset_event = threading.Event()
         print("[YUMI_JACOBI] Done initializing YuMi.")
 
         self._interface_lock = threading.Lock()
-    
+
     @property
     def interface_failed(self):
         return self.reset_triggered
 
     def _init_interface(self):
         self.interface = Interface(speed=self.speed, on_fail=self._on_interface_fail)
-        
+
     # def _on_interface_fail(self):
     #     print("[YuMiRobotEnv] Failure detected.")
     #     self.reset_triggered = True
@@ -51,7 +52,6 @@ class YuMiRobotEnv:
     #     self._reset_event.wait()  # Block until reset
     #     print("[YuMiRobotEnv] Unblocked after reset.")
 
-        
     # def _on_interface_reset_request(self):
     #     with self._interface_lock:
     #         print("[YuMiRobotEnv] Resetting interface...")
@@ -76,16 +76,16 @@ class YuMiRobotEnv:
     def _on_interface_fail(self):
         print("[YuMiRobotEnv] Failure detected.")
         self.reset_triggered = True
-    #     self._reset_event.clear()
-    #     print("[YuMiRobotEnv] Waiting for external reset...")
-    #     self._reset_event.wait() 
-        
-    # def _on_interface_reset_request(self):
+        #     self._reset_event.clear()
+        #     print("[YuMiRobotEnv] Waiting for external reset...")
+        #     self._reset_event.wait()
+
+        # def _on_interface_reset_request(self):
         print("[YuMiRobotEnv] Resetting interface...")
         del self.interface
-        time.sleep(0.3)
+        time.sleep(2.0)
         self._init_interface()
-        time.sleep(1.0)
+        time.sleep(2.0)
 
         self.reset_triggered = False
         self._reset_event.set()  # <- UNBLOCK _on_interface_fail
@@ -253,7 +253,7 @@ class YuMiRobotEnv:
         )
         # Skip execution if planning failed
         if isinstance(trajectories, PlanningError):
-            cprint("[Warning] Planning failed. Skipping execution.", 'red')
+            cprint("[Warning] Planning failed. Skipping execution.", "red")
             return isinstance(trajectories, PlanningError)
 
         if arm == "right" or arm == "left":
@@ -263,7 +263,6 @@ class YuMiRobotEnv:
                     l_trajectory=trajectories[0] if l_targets else None,
                     r_trajectory=trajectories[1] if r_targets else None,
                 )
-
 
         else:  # "both"
             self.interface.run_trajectories(trajectories)
@@ -565,7 +564,7 @@ class YuMiRobotEnv:
             left_target_pose.translation[2] += 0.1
         if right_target_pose:
             right_target_pose.translation[2] += 0.1
-    
+
         self.set_ee_pose(left_pose=left_target_pose, right_pose=right_target_pose)
 
         for _ in range(2):
@@ -588,7 +587,6 @@ class YuMiRobotEnv:
 
         cprint("Dual-hand grasp completed.", "blue")
 
-        
     def move_dual_hand_to(
         self,
         target_center: np.ndarray,

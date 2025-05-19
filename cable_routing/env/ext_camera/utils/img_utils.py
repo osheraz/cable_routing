@@ -5,9 +5,64 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import threading
 
 SCALE_FACTOR = 1.0
-SAFE_HEIGHT = 0.002
+SAFE_HEIGHT = 0.00
+2
+
+
+class Visualizer:
+    def __init__(self):
+        plt.ion()  # Enable interactive mode
+        self.fig, self.ax = plt.subplots(figsize=(10, 8))
+        self._initialized = True
+
+    def visualize(self, waypoints, waypoints_secondary, eef_orientations):
+        self.ax.clear()
+
+        path_arr = np.array(waypoints)
+        path_arr2 = np.array(waypoints_secondary)
+
+        self.ax.plot(path_arr[:, 0], path_arr[:, 1], "bo-", label="Primary Arm Path")
+        self.ax.plot(
+            path_arr2[:, 0], path_arr2[:, 1], "ro-", label="Secondary Arm Path"
+        )
+
+        arrow_scale = 0.025
+        arrow_head = dict(head_width=0.007, head_length=0.012, fc="black", ec="black")
+
+        for idx, (point, orientation) in enumerate(zip(waypoints, eef_orientations)):
+            dx, dy = arrow_scale * np.cos(orientation), arrow_scale * np.sin(
+                orientation
+            )
+            self.ax.arrow(point[0], point[1], dx, dy, **arrow_head)
+            self.ax.text(
+                point[0] + 0.005, point[1] + 0.005, f"P{idx}", fontsize=10, color="blue"
+            )
+
+        for idx, (point, orientation) in enumerate(
+            zip(waypoints_secondary, eef_orientations)
+        ):
+            dx, dy = arrow_scale * np.cos(orientation), arrow_scale * np.sin(
+                orientation
+            )
+            self.ax.arrow(point[0], point[1], dx, dy, **arrow_head)
+            self.ax.text(
+                point[0] + 0.005, point[1] - 0.005, f"S{idx}", fontsize=10, color="red"
+            )
+
+        self.ax.set_xlabel("X (meters)")
+        self.ax.set_ylabel("Y (meters)")
+        self.ax.set_title("Cable Path with End-Effector Orientations")
+        self.ax.grid(True)
+        # self.ax.axis("equal")
+        self.ax.legend()
+        self.ax.set_xlim([0.1, 0.6])
+        self.ax.set_ylim([-0.27, 0.27])
+
+        self.fig.canvas.draw_idle()
+        self.fig.canvas.flush_events()
 
 
 def normalize(vec):
