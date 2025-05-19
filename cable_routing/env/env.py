@@ -53,27 +53,6 @@ import sys
 
 
 # TODO: move to seperate utils
-# def run_with_timeout(func, timeout=2, *args, checks=True, **kwargs):
-#     timeout = 15
-#     with ThreadPoolExecutor(max_workers=1) as executor:
-#         future = executor.submit(func, *args, **kwargs)
-#         try:
-#             result = future.result(timeout=timeout)
-#             if checks and result is True:
-#                 cprint(f"[Fail] Function `{func.__name__}` returned True", "red")
-#                 cprint(f"Arguments: {args}", "red")
-#                 cprint(f"Keyword arguments: {kwargs}", "red")
-#                 exit()
-#             return result
-#         except FuturesTimeout:
-#             cprint(
-#                 f"[Timeout] Function `{func.__name__}` timed out after {timeout} seconds.",
-#                 "yellow",
-#             )
-#         except Exception as e:
-#             cprint(f"[Error] Function `{func.__name__}` raised: {e}", "yellow")
-#             traceback.print_exc()
-#     return None
 
 
 def run_with_timeout(func, timeout=15, *args, checks=True, **kwargs):
@@ -90,8 +69,6 @@ def run_with_timeout(func, timeout=15, *args, checks=True, **kwargs):
                         f"[Fail] Function `{f.__name__}` returned True (planning failed)",
                         "red",
                     )
-                    cprint(f"Arguments: {args}", "red")
-                    cprint(f"Keyword arguments: {kwargs}", "red")
                     return result
 
                 return result

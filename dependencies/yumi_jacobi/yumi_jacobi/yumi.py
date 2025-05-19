@@ -54,6 +54,8 @@ class YuMiArm(ABBDriver):
 
         if "[-" in repr(result):
             self.last_error = result
+            # 201 - torque
+            # 101 - joint limits
             if self._on_fail:
                 # print(f"[{self._side}] failed motion triggered")
                 self._on_fail()
