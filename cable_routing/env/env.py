@@ -44,163 +44,16 @@ from cable_routing.handloom.handloom_pipeline.tracer import (
     TraceEnd,
 )
 
+from cable_routing.env.robots.misc import (
+    calculate_sequence,
+    need_regrasp,
+    run_with_fallback,
+)
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 import traceback
 import numpy as np
 import matplotlib.pyplot as plt
 from termcolor import colored, cprint
-import sys
-
-
-# TODO: move to seperate utils
-
-
-def run_with_timeout(func, timeout=15, *args, checks=True, **kwargs):
-    timeout = 15
-
-    def _try_exec(f, *args, **kwargs):
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(f, *args, **kwargs)
-            try:
-                result = future.result(timeout=timeout)
-
-                if checks and result is True:
-                    cprint(
-                        f"[Fail] Function `{f.__name__}` returned True (planning failed)",
-                        "red",
-                    )
-                    return result
-
-                return result
-
-            except FuturesTimeout:
-                cprint(
-                    f"[Timeout] `{f.__name__}` timed out after {timeout} seconds.",
-                    "yellow",
-                )
-            except Exception as e:
-                cprint(f"[Error] `{f.__name__}` raised: {e}", "yellow")
-                traceback.print_exc()
-
-        return None
-
-    # First attempt
-    result = _try_exec(func, *args, **kwargs)
-    if result is None:
-        return result
-
-    # Retry with fallback if this was planning failure
-    if func.__name__ == "plan_and_execute_linear_waypoints" and "waypoints" in kwargs:
-        cprint("[Retry] Motion failed — retrying with fallback rotation", "cyan")
-
-        original_waypoints = kwargs["waypoints"]
-        if not original_waypoints:
-            cprint("[Retry Abort] No waypoints given", "yellow")
-            return result
-
-        try:
-            # Handle left/right/both arms
-            if isinstance(original_waypoints, list):
-                # Single arm
-                fallback_rotation = original_waypoints[0].rotation
-                fallback = [
-                    RigidTransform(
-                        translation=wp.translation, rotation=fallback_rotation
-                    )
-                    for wp in original_waypoints
-                ]
-            elif isinstance(original_waypoints, tuple):
-                # Both arms
-                fallback = []
-                for arm_waypoints in original_waypoints:
-                    if arm_waypoints:
-                        fallback_rotation = arm_waypoints[0].rotation
-                        arm_fallback = [
-                            RigidTransform(
-                                translation=wp.translation, rotation=fallback_rotation
-                            )
-                            for wp in arm_waypoints
-                        ]
-                        fallback.append(arm_fallback)
-                    else:
-                        fallback.append([])
-                fallback = tuple(fallback)
-            else:
-                cprint("[Retry Abort] Unknown waypoint format", "red")
-                return None
-
-            new_kwargs = dict(kwargs)
-            new_kwargs["waypoints"] = fallback
-            time.sleep(0.3)
-            return _try_exec(func, *args, **new_kwargs)
-
-        except Exception as e:
-            cprint(f"[Retry Failed] Could not build fallback waypoints: {e}", "red")
-            traceback.print_exc()
-
-    return result
-
-
-def need_regrasp(curr_clip, next_clip, prev_clip, arm):
-    curr_pos = np.array([curr_clip["x"], curr_clip["y"]])
-    next_pos = np.array([next_clip["x"], next_clip["y"]])
-
-    direction = next_clip["x"] - curr_clip["x"]
-    if np.linalg.norm(next_pos - curr_pos) <= 100:
-        return False
-
-    if arm == "right":
-        return direction > 0
-    if arm == "left":
-        return direction < 0
-
-    raise ValueError(f"Invalid arm: {arm}")
-
-
-def calculate_sequence(curr_clip, prev_clip, next_clip):
-    """
-    determines how to wrap around a give clip
-    """
-
-    curr_x, curr_y = curr_clip["x"], curr_clip["y"]
-    prev_x, prev_y = prev_clip["x"], prev_clip["y"]
-    next_x, next_y = next_clip["x"], next_clip["y"]
-
-    num2dir = {0: "up", 1: "right", 2: "down", 3: "left"}
-    dir2num = {val: key for key, val in num2dir.items()}
-    clip_vecs = np.array([[0, 1, 0], [1, 0, 0], [0, -1, 0], [-1, 0, 0]])
-    prev2curr = normalize(np.array([curr_x - prev_x, -(curr_y - prev_y), 0]))
-    curr2prev = -prev2curr
-    curr2next = normalize(np.array([next_x - curr_x, -(next_y - curr_y), 0]))
-    clip_vec = clip_vecs[(curr_clip["orientation"] // 90 + 1) % 4]
-    is_clockwise = np.cross(prev2curr, curr2next)[-1] > 0
-
-    net_vector = curr2prev + curr2next
-    if abs(net_vector[0]) > abs(net_vector[1]):
-        if net_vector[0] > 0:
-            middle_node = dir2num["left"]
-        else:
-            middle_node = dir2num["right"]
-    else:
-        if net_vector[1] > 0:
-            middle_node = dir2num["down"]
-        else:
-            middle_node = dir2num["up"]
-
-    if is_clockwise:
-        sequence = [
-            num2dir[(middle_node + 1) % 4],
-            num2dir[middle_node],
-            num2dir[(middle_node - 1) % 4],
-        ]
-    else:
-        sequence = [
-            num2dir[(middle_node - 1) % 4],
-            num2dir[middle_node],
-            num2dir[(middle_node + 1) % 4],
-        ]
-
-    return sequence, -1 if is_clockwise else 1
 
 
 #################################################################
@@ -255,7 +108,7 @@ class ExperimentEnv:
         self.swaps = 0
         self.workspace_img = self.zed_cam.get_rgb().copy()
 
-        self.visualizer = Visualizer()
+        # self.visualizer = Visualizer()
 
         # manual reset service with ros
         self._start_manual_reset_service()
@@ -955,8 +808,8 @@ class ExperimentEnv:
         eef_orientations = [np.array(e) for e in eef_orientations]
         eef_orientations.append(eef_orientations[-1])
 
-        # eef_orientations = np.unwrap(eef_orientations)
-        # eef_orientations = np.mod(eef_orientations, 2 * np.pi).tolist()
+        eef_orientations = np.unwrap(eef_orientations)
+        eef_orientations = np.mod(eef_orientations, 2 * np.pi).tolist()
 
         smoothed = [eef_orientations[0]]
         for ori in eef_orientations[1:]:
@@ -975,8 +828,8 @@ class ExperimentEnv:
 
         if display:
             plt.figure(figsize=(8, 3))
-            plt.plot(eef_orientations, label="eef_orientations")
-            plt.plot(raw, label="raw")
+            plt.plot(eef_orientations, label="eef_first")
+            # plt.plot(raw, label="raw")
 
             plt.plot(eef_second, label="eef_second", linestyle="--")
             plt.legend()
@@ -1026,7 +879,7 @@ class ExperimentEnv:
         eef_orientations, eef_second = self._compute_orientations(waypoints, swapped)
 
         # Optional visualization of paths and orientations
-        if display or True:
+        if display:
             self.visualizer.visualize(waypoints, waypoints_secondary, eef_orientations)
 
         # Executing the motion
@@ -1040,11 +893,12 @@ class ExperimentEnv:
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
         ]
-        result = run_with_timeout(
+        result = run_with_fallback(
             self.robot.plan_and_execute_linear_waypoints,
-            4,
+            10,
             s_arm,
             waypoints=poses_secondary,
+            fallback_func=self.robot.set_ee_pose,
         )
 
         # Align orientation of secondary arm
@@ -1059,11 +913,12 @@ class ExperimentEnv:
             ),
         ]
 
-        result = run_with_timeout(
+        result = run_with_fallback(
             self.robot.plan_and_execute_linear_waypoints,
-            4,
+            10,
             s_arm,
             waypoints=poses_secondary_align,
+            fallback_func=self.robot.set_ee_pose,
         )
 
         # Advance secondary arm slightly before primary moves
@@ -1076,11 +931,12 @@ class ExperimentEnv:
             for wp, ori in zip(waypoints_secondary, eef_second)
         ]
 
-        result = run_with_timeout(
+        result = run_with_fallback(
             self.robot.plan_and_execute_linear_waypoints,
-            4,
+            10,
             s_arm,
             waypoints=poses_secondary[0:3],
+            fallback_func=self.robot.set_ee_pose,
         )
 
         # Move primary arm to start position
@@ -1088,8 +944,12 @@ class ExperimentEnv:
             RigidTransform(translation=waypoint, rotation=current_pose.rotation)
             for waypoint in [current_pose.translation, waypoints[0]]
         ]
-        result = run_with_timeout(
-            self.robot.plan_and_execute_linear_waypoints, 4, arm, waypoints=poses
+        result = run_with_fallback(
+            self.robot.plan_and_execute_linear_waypoints,
+            10,
+            arm,
+            waypoints=poses,
+            fallback_func=self.robot.set_ee_pose,
         )
 
         self.robot.set_speed("normal")
@@ -1103,8 +963,12 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
-        result = run_with_timeout(
-            self.robot.plan_and_execute_linear_waypoints, 4, arm, waypoints=poses
+        result = run_with_fallback(
+            self.robot.plan_and_execute_linear_waypoints,
+            10,
+            arm,
+            waypoints=poses,
+            fallback_func=self.robot.set_ee_pose,
         )
 
         # Prepare full motion paths for both arms
@@ -1124,39 +988,41 @@ class ExperimentEnv:
         # Interleaved execution of both arms along the path (3-waypoint sliding windows)
         for i in range(len(poses) - 2):
 
-            result = run_with_timeout(
+            result = run_with_fallback(
                 self.robot.plan_and_execute_linear_waypoints,
-                4,
+                10,
                 arm,
                 waypoints=poses[i : i + 3],
+                fallback_func=self.robot.set_ee_pose,
             )
 
             if not i + 4 > len(poses_secondary):
-                result = run_with_timeout(
+                result = run_with_fallback(
                     self.robot.plan_and_execute_linear_waypoints,
-                    4,
+                    10,
                     s_arm,
                     waypoints=poses_secondary[i + 1 : i + 4],
+                    fallback_func=self.robot.set_ee_pose,
                 )
 
         # Final alignment of both arms at the end
 
-        run_with_timeout(
+        run_with_fallback(
             self.robot.set_ee_pose,
-            4,
+            10,
             left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
             right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
         )
 
-        # result = run_with_timeout(
+        # result = run_with_fallback(
         #     self.robot.plan_and_execute_linear_waypoints,
-        #     4,
+        #     10,
         #     s_arm,
         #     waypoints=[poses_secondary[-1], poses_secondary[-1]],
         # )
-        # result = run_with_timeout(
+        # result = run_with_fallback(
         #     self.robot.plan_and_execute_linear_waypoints,
-        #     4,
+        #     10,
         #     arm,
         #     waypoints=[poses[-1], poses[-1]],
         # )
@@ -1681,6 +1547,70 @@ class ExperimentEnv:
         self.robot.close_grippers(side=arm)
         self.robot.set_speed("normal")
 
+    def perform_nearest_analytic_grasp_dual(
+        self,
+        prev_grasp_point,
+        prev_follow_point,
+        grasp_arm,
+        follow_arm,
+        visualize=False,
+    ):
+        # grasp arm
+        world_coord_follow, world_coord_grasp = None, None
+        cable_ori_follow, cable_ori_grasp = None, None
+        move_to_pixel_grasp = None
+
+        if prev_grasp_point is not None:
+            move_to_pixel_grasp, cable_ori_grasp = (
+                self.get_nearest_analytic_grasp_point(
+                    prev_grasp_point, visualize=visualize
+                )
+            )
+            cable_ori_grasp = np.deg2rad(-cable_ori_grasp + 90)
+            assert print("should be here")
+            world_coord_grasp = get_world_coord_from_pixel_coord(
+                move_to_pixel_grasp,
+                self.zed_cam.intrinsic,
+                self.T_CAM_BASE[grasp_arm],
+            )
+
+        # follow_arm
+        if prev_follow_point is not None:
+            move_to_pixel_follow, cable_ori_follow = (
+                self.get_nearest_analytic_grasp_point(
+                    prev_follow_point, visualize=visualize
+                )
+            )
+            cable_ori_follow = np.deg2rad(-cable_ori_follow + 90)
+
+            world_coord_follow = get_world_coord_from_pixel_coord(
+                move_to_pixel_follow,
+                self.zed_cam.intrinsic,
+                self.T_CAM_BASE[follow_arm],
+            )
+
+        world_coords = {
+            "left": world_coord_follow if follow_arm == "left" else world_coord_grasp,
+            "right": world_coord_follow if follow_arm == "right" else world_coord_grasp,
+        }
+
+        eef_rots = {
+            "left": cable_ori_follow if follow_arm == "left" else cable_ori_grasp,
+            "right": cable_ori_follow if follow_arm == "right" else cable_ori_grasp,
+        }
+
+        self.robot.dual_hand_grasp(
+            left_world_coord=world_coords["left"],
+            left_eef_rot=eef_rots["left"],
+            right_world_coord=world_coords["right"],
+            right_eef_rot=eef_rots["right"],
+            grasp_arm=grasp_arm,
+        )
+
+        self.cable_in_arm = grasp_arm
+
+        return move_to_pixel_grasp, world_coord_grasp
+
     #################################################################
     # TODO: Refactor - split here into a separate tracing class
     #################################################################
@@ -1968,67 +1898,3 @@ class ExperimentEnv:
             cv2.destroyAllWindows()
 
         return (predicted_x, predicted_y), predicted_orientation
-
-    def perform_nearest_analytic_grasp_dual(
-        self,
-        prev_grasp_point,
-        prev_follow_point,
-        grasp_arm,
-        follow_arm,
-        visualize=False,
-    ):
-        # grasp arm
-        world_coord_follow, world_coord_grasp = None, None
-        cable_ori_follow, cable_ori_grasp = None, None
-        move_to_pixel_grasp = None
-
-        if prev_grasp_point is not None:
-            move_to_pixel_grasp, cable_ori_grasp = (
-                self.get_nearest_analytic_grasp_point(
-                    prev_grasp_point, visualize=visualize
-                )
-            )
-            cable_ori_grasp = np.deg2rad(-cable_ori_grasp + 90)
-            assert print("should be here")
-            world_coord_grasp = get_world_coord_from_pixel_coord(
-                move_to_pixel_grasp,
-                self.zed_cam.intrinsic,
-                self.T_CAM_BASE[grasp_arm],
-            )
-
-        # follow_arm
-        if prev_follow_point is not None:
-            move_to_pixel_follow, cable_ori_follow = (
-                self.get_nearest_analytic_grasp_point(
-                    prev_follow_point, visualize=visualize
-                )
-            )
-            cable_ori_follow = np.deg2rad(-cable_ori_follow + 90)
-
-            world_coord_follow = get_world_coord_from_pixel_coord(
-                move_to_pixel_follow,
-                self.zed_cam.intrinsic,
-                self.T_CAM_BASE[follow_arm],
-            )
-
-        world_coords = {
-            "left": world_coord_follow if follow_arm == "left" else world_coord_grasp,
-            "right": world_coord_follow if follow_arm == "right" else world_coord_grasp,
-        }
-
-        eef_rots = {
-            "left": cable_ori_follow if follow_arm == "left" else cable_ori_grasp,
-            "right": cable_ori_follow if follow_arm == "right" else cable_ori_grasp,
-        }
-
-        self.robot.dual_hand_grasp(
-            left_world_coord=world_coords["left"],
-            left_eef_rot=eef_rots["left"],
-            right_world_coord=world_coords["right"],
-            right_eef_rot=eef_rots["right"],
-            grasp_arm=grasp_arm,
-        )
-
-        self.cable_in_arm = grasp_arm
-
-        return move_to_pixel_grasp, world_coord_grasp

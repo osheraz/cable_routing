@@ -223,7 +223,6 @@ class YuMiRobotEnv:
         )
         # Skip execution if planning failed
         if isinstance(trajectories, PlanningError):
-            cprint("[Warning] Planning failed. Skipping execution.", "red")
             return isinstance(trajectories, PlanningError)
 
         if arm == "right" or arm == "left":
