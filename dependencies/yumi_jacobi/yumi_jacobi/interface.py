@@ -24,7 +24,7 @@ class Interface:
     GRIP_SIDEWAYS = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
 
     def __init__(self, *args, on_fail=None, **kwargs):
-        
+
         self._async_interface = AsyncInterface(*args, **kwargs, on_fail=on_fail)
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._start_loop, daemon=True)
@@ -33,7 +33,7 @@ class Interface:
         self.planner = self._async_interface.planner
         self.driver_left = self._async_interface.driver_left
         self.driver_right = self._async_interface.driver_right
-            
+
     def _start_loop(self):
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
@@ -41,14 +41,14 @@ class Interface:
     def _run_coroutine(self, coro):
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
-    
+
     def is_ready(self):
         try:
             # Try accessing a basic property to check connection
             _ = self.driver_left.current_joint_position
             return True
         except:
-            return False 
+            return False
 
     def calibrate_grippers(self):
         """
@@ -168,8 +168,8 @@ class Interface:
 
     def plan_cartesian_waypoints(
         self,
-        l_targets: List[RigidTransform],
-        r_targets: List[RigidTransform],
+        l_targets: List[RigidTransform] = [],
+        r_targets: List[RigidTransform] = [],
         start_from_current_cfg=True,
     ) -> List[Trajectory]:
         """
@@ -348,7 +348,7 @@ class AsyncInterface:
             port=6511,
             module=module,
             version=ABBDriver.RobotWareVersion.RobotWare6,
-            on_fail=on_fail
+            on_fail=on_fail,
         )
 
         module = ABBDriver.RapidModule(
@@ -362,7 +362,7 @@ class AsyncInterface:
             port=6512,
             module=module,
             version=ABBDriver.RobotWareVersion.RobotWare6,
-            on_fail=on_fail
+            on_fail=on_fail,
         )
         self.driver_left.path_deviation_error_threshold = 0.3
 

@@ -37,11 +37,11 @@ def run_with_fallback(
                 result = future.result(timeout=timeout)
                 if checks and result is True:
                     cprint(
-                        f"[Fail] Function `{f.__name__}` returned True (planning failed)",
+                        f"[Fail] Function `{f.__name__}` returned True for planning failed",
                         "red",
                     )
                     return "planning_failed"
-                return result
+                return "success"
             except FuturesTimeout:
                 cprint(
                     f"[Timeout] `{f.__name__}` timed out after {timeout} seconds.",
@@ -88,7 +88,7 @@ def run_with_fallback(
                     fallback = tuple(fallback)
                 else:
                     cprint("[Retry Abort] Unknown waypoint format", "red")
-                    return None
+                    return "fail"
 
                 new_kwargs = dict(kwargs)
                 new_kwargs["waypoints"] = fallback
@@ -138,7 +138,6 @@ def run_with_fallback(
             except Exception as e:
                 cprint(f"[Fallback Error] {e}", "red")
                 traceback.print_exc()
-                exit(1)
 
     return result
 

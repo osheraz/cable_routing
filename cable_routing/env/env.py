@@ -884,6 +884,22 @@ class ExperimentEnv:
 
         # Executing the motion
 
+        def safe_fallback(arm, waypoints):
+            result = run_with_fallback(
+                self.robot.plan_and_execute_linear_waypoints,
+                10,
+                arm,
+                waypoints=waypoints,
+                fallback_func=self.robot.set_ee_pose,
+            )
+            if result != "success":
+                # do somthing
+                pass
+
+            current_pose = self.robot.get_ee_pose()[0 if arm == "left" else 1]
+            # waypoints = [current_pose] + waypoints
+            return
+
         # Slightly open both grippers before motion
         self.robot.grippers_move_to(s_arm, distance=self.robot.gripper_opening)  # )- 2)
         self.robot.grippers_move_to(arm, distance=self.robot.gripper_opening)  # - 2)
@@ -893,64 +909,54 @@ class ExperimentEnv:
             RigidTransform(translation=waypoint, rotation=second_pose.rotation)
             for waypoint in [second_pose.translation, waypoints_secondary[0]]
         ]
-        result = run_with_fallback(
-            self.robot.plan_and_execute_linear_waypoints,
-            10,
-            s_arm,
-            waypoints=poses_secondary,
-            fallback_func=self.robot.set_ee_pose,
-        )
 
-        # Align orientation of secondary arm
-        poses_secondary_align = [
-            RigidTransform(
-                translation=waypoints_secondary[0], rotation=second_pose.rotation
-            ),
-            RigidTransform(
-                translation=waypoints_secondary[0],
-                rotation=RigidTransform.x_axis_rotation(-np.pi)
-                @ RigidTransform.z_axis_rotation(-eef_second[0]),
-            ),
-        ]
+        safe_fallback(s_arm, poses_secondary)
 
-        result = run_with_fallback(
-            self.robot.plan_and_execute_linear_waypoints,
-            10,
-            s_arm,
-            waypoints=poses_secondary_align,
-            fallback_func=self.robot.set_ee_pose,
-        )
+        # TODO: find the bug - constant issue here
+        # TODO: just make it constant - +90 and -90 depend on the direction (left to right, right to left.)
 
-        # Advance secondary arm slightly before primary moves
-        poses_secondary = [
-            RigidTransform(
-                translation=wp,
-                rotation=RigidTransform.x_axis_rotation(-np.pi)
-                @ RigidTransform.z_axis_rotation(-ori),
-            )
-            for wp, ori in zip(waypoints_secondary, eef_second)
-        ]
+        # lets go brute force
+        try:
+            # Align orientation of secondary arm
+            poses_secondary_align = [
+                RigidTransform(
+                    translation=waypoints_secondary[0], rotation=second_pose.rotation
+                ),
+                RigidTransform(
+                    translation=waypoints_secondary[0],
+                    rotation=RigidTransform.x_axis_rotation(-np.pi)
+                    @ RigidTransform.z_axis_rotation(-eef_second[0]),
+                ),
+            ]
 
-        result = run_with_fallback(
-            self.robot.plan_and_execute_linear_waypoints,
-            10,
-            s_arm,
-            waypoints=poses_secondary[0:3],
-            fallback_func=self.robot.set_ee_pose,
-        )
+            safe_fallback(s_arm, poses_secondary_align)
+
+            poses_secondary = [
+                RigidTransform(
+                    translation=wp,
+                    rotation=RigidTransform.x_axis_rotation(-np.pi)
+                    @ RigidTransform.z_axis_rotation(-ori),
+                )
+                for wp, ori in zip(waypoints_secondary, eef_second)
+            ]
+        except:
+            # Advance secondary arm slightly before primary moves
+            poses_secondary = [
+                RigidTransform(
+                    translation=wp,
+                    rotation=second_pose.rotation,
+                )
+                for wp, ori in zip(waypoints_secondary, eef_second)
+            ]
+
+        safe_fallback(s_arm, poses_secondary[0:3])
 
         # Move primary arm to start position
         poses = [
             RigidTransform(translation=waypoint, rotation=current_pose.rotation)
             for waypoint in [current_pose.translation, waypoints[0]]
         ]
-        result = run_with_fallback(
-            self.robot.plan_and_execute_linear_waypoints,
-            10,
-            arm,
-            waypoints=poses,
-            fallback_func=self.robot.set_ee_pose,
-        )
+        safe_fallback(arm, poses)
 
         self.robot.set_speed("normal")
 
@@ -963,13 +969,7 @@ class ExperimentEnv:
                 @ RigidTransform.z_axis_rotation(-eef_orientations[0]),
             ),
         ]
-        result = run_with_fallback(
-            self.robot.plan_and_execute_linear_waypoints,
-            10,
-            arm,
-            waypoints=poses,
-            fallback_func=self.robot.set_ee_pose,
-        )
+        safe_fallback(arm, poses)
 
         # Prepare full motion paths for both arms
         poses = [
@@ -988,22 +988,10 @@ class ExperimentEnv:
         # Interleaved execution of both arms along the path (3-waypoint sliding windows)
         for i in range(len(poses) - 2):
 
-            result = run_with_fallback(
-                self.robot.plan_and_execute_linear_waypoints,
-                10,
-                arm,
-                waypoints=poses[i : i + 3],
-                fallback_func=self.robot.set_ee_pose,
-            )
+            safe_fallback(arm, poses[i : i + 3])
 
             if not i + 4 > len(poses_secondary):
-                result = run_with_fallback(
-                    self.robot.plan_and_execute_linear_waypoints,
-                    10,
-                    s_arm,
-                    waypoints=poses_secondary[i + 1 : i + 4],
-                    fallback_func=self.robot.set_ee_pose,
-                )
+                safe_fallback(s_arm, poses_secondary[i + 1 : i + 4])
 
         # Final alignment of both arms at the end
 
@@ -1013,19 +1001,6 @@ class ExperimentEnv:
             left_pose=(poses[-1] if arm == "left" else poses_secondary[-1]),
             right_pose=(poses[-1] if arm == "right" else poses_secondary[-1]),
         )
-
-        # result = run_with_fallback(
-        #     self.robot.plan_and_execute_linear_waypoints,
-        #     10,
-        #     s_arm,
-        #     waypoints=[poses_secondary[-1], poses_secondary[-1]],
-        # )
-        # result = run_with_fallback(
-        #     self.robot.plan_and_execute_linear_waypoints,
-        #     10,
-        #     arm,
-        #     waypoints=[poses[-1], poses[-1]],
-        # )
 
     #################################################################
     # TODO: Refactor - split here into a separate "primitive" class
