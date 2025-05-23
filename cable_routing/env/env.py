@@ -939,6 +939,8 @@ class ExperimentEnv:
                 )
                 for wp, ori in zip(waypoints_secondary, eef_second)
             ]
+            safe_fallback(s_arm, poses_secondary[0:3])
+
         except:
             # Advance secondary arm slightly before primary moves
             poses_secondary = [
@@ -949,7 +951,7 @@ class ExperimentEnv:
                 for wp, ori in zip(waypoints_secondary, eef_second)
             ]
 
-        safe_fallback(s_arm, poses_secondary[0:3])
+            safe_fallback(s_arm, poses_secondary[0:3])
 
         # Move primary arm to start position
         poses = [
@@ -1354,7 +1356,7 @@ class ExperimentEnv:
             prev_follow_point=s_arm_pixel_pose,
             grasp_arm="left" if arm == "left" else "right",
             follow_arm="right" if arm == "left" else "left",
-            visualize=False,
+            visualize=True,
         )
 
         self.robot.grippers_move_to(
