@@ -1772,6 +1772,14 @@ class ExperimentEnv:
             else:
                 gray_img = img.copy()
 
+        pixels_to_mask = self.board.get_clips()
+        for (pin_x, pin_y) in pixels_to_mask:
+            cv2.circle(gray_img, (pin_x, pin_y), 150, (0, 0, 0), -1)
+            
+        cv2.imshow("Masked Image", gray_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
         squared_magnitude = lambda my_tuple: sum([i**2 for i in my_tuple])
 
         x, y = start_point[0], start_point[1]
